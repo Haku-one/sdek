@@ -228,9 +228,9 @@ jQuery(document).ready(function($) {
         $('#cdek-pickup-points-list').html(`<p class="error">${message}</p>`);
     }
 
-    // Отслеживание изменений в поле города
+    // Отслеживание изменений в поле адреса (теперь это город)
     let cityTimeout;
-    $(document).on('input change', '#shipping-city, #shipping_city, input[name="shipping_city"]', function() {
+    $(document).on('input change', '#shipping-address_1, input[name="shipping_address_1"]', function() {
         const city = cleanCityName($(this).val());
         
         clearTimeout(cityTimeout);
@@ -291,7 +291,7 @@ jQuery(document).ready(function($) {
 
     // Инициализация при загрузке страницы
     function initOnPageLoad() {
-        const cityField = $('#shipping-city, #shipping_city, input[name="shipping_city"]').first();
+        const cityField = $('#shipping-address_1, input[name="shipping_address_1"]').first();
         if (cityField.length > 0) {
             const city = cleanCityName(cityField.val());
             if (city && city.length > 2) {

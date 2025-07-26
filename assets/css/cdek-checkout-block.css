@@ -160,17 +160,26 @@
 /* WooCommerce Blocks compatibility */
 .wp-block-woocommerce-checkout .cdek-pickup-container {
     margin: 1rem 0;
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem;
 }
 
 .wc-block-checkout__shipping-option .cdek-pickup-container {
-    border-top: 1px solid #e0e0e0;
     margin-top: 1rem;
-    padding-top: 1rem;
+}
+
+/* Integration with shipping radio buttons */
+.wc-block-components-radio-control + .cdek-pickup-container {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
 }
 
 /* Hide default fields in blocks checkout */
 .wp-block-woocommerce-checkout .wc-block-components-address-form .wc-block-components-text-input:has(input[id*="state"]),
-.wp-block-woocommerce-checkout .wc-block-components-address-form .wc-block-components-text-input:has(input[id*="postcode"]) {
+.wp-block-woocommerce-checkout .wc-block-components-address-form .wc-block-components-text-input:has(input[id*="postcode"]),
+.wp-block-woocommerce-checkout .wc-block-components-address-form .wc-block-components-text-input:has(input[id*="city"]) {
     display: none !important;
 }
 

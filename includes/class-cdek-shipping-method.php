@@ -71,9 +71,9 @@ class CDEK_Shipping_Method extends WC_Shipping_Method {
     }
     
     public function calculate_shipping($package = array()) {
-        // Получаем город доставки
+        // Получаем город доставки из address_1 поля
         $destination = $package['destination'];
-        $city = isset($destination['city']) ? trim($destination['city']) : '';
+        $city = isset($destination['address_1']) ? trim($destination['address_1']) : '';
         
         if (empty($city)) {
             return;

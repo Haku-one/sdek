@@ -1,6 +1,4 @@
-const { registerCheckoutFilters } = window.wc.blocksCheckout;
-const { __ } = window.wp.i18n;
-const { getSetting } = window.wc.wcSettings;
+// CDEK checkout integration for WooCommerce Blocks - simplified version
 
 // CDEK checkout integration for WooCommerce Blocks
 (function() {
@@ -35,17 +33,27 @@ const { getSetting } = window.wc.wcSettings;
         });
     }
 
-    // Observe changes in city field
+    // Observe changes in address field (which is now city field)
     function observeAddressChanges() {
         const observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 if (mutation.type === 'childList') {
-                    const cityInputs = document.querySelectorAll('input[id*="city"], input[name*="city"]');
+                    // Look for address_1 inputs (which are now city inputs)
+                    const cityInputs = document.querySelectorAll('input[id*="address"], input[name*="address"], input[id*="shipping-address_1"]');
                     cityInputs.forEach(function(input) {
                         if (!input.hasAttribute('data-cdek-listener')) {
                             input.setAttribute('data-cdek-listener', 'true');
                             input.addEventListener('input', debounce(handleCityChange, 1000));
                             input.addEventListener('change', debounce(handleCityChange, 1000));
+                        }
+                    });
+                    
+                    // Also check for CDEK shipping method selection
+                    const shippingRadios = document.querySelectorAll('input[value*="cdek_shipping"]');
+                    shippingRadios.forEach(function(radio) {
+                        if (!radio.hasAttribute('data-cdek-shipping-listener')) {
+                            radio.setAttribute('data-cdek-shipping-listener', 'true');
+                            radio.addEventListener('change', handleShippingMethodChange);
                         }
                     });
                 }
@@ -62,11 +70,33 @@ const { getSetting } = window.wc.wcSettings;
     function handleCityChange(event) {
         const city = cleanCityName(event.target.value);
         
-        if (city && city.length > 2) {
+        // Only show CDEK interface if CDEK shipping is selected
+        if (isCdekShippingSelected() && city && city.length > 2) {
             loadPickupPoints(city);
         } else {
             hideCdekContainer();
         }
+    }
+
+    // Handle shipping method change
+    function handleShippingMethodChange(event) {
+        if (event.target.value.includes('cdek_shipping')) {
+            // CDEK shipping selected, check if we have a city
+            const cityInput = document.querySelector('input[id*="shipping-address_1"]');
+            if (cityInput && cityInput.value.trim().length > 2) {
+                const city = cleanCityName(cityInput.value);
+                loadPickupPoints(city);
+            }
+        } else {
+            // Other shipping method selected, hide CDEK interface
+            hideCdekContainer();
+        }
+    }
+
+    // Check if CDEK shipping method is selected
+    function isCdekShippingSelected() {
+        const selectedRadio = document.querySelector('input[value*="cdek_shipping"]:checked');
+        return selectedRadio !== null;
     }
 
     // Clean city name
@@ -120,21 +150,36 @@ const { getSetting } = window.wc.wcSettings;
                 <input type="hidden" id="cdek-selected-pickup-point" name="cdek_selected_pickup_point" value="">
             `;
             
-            // Find the best place to insert
-            const shippingSection = document.querySelector('.wc-block-checkout__shipping-option');
-            if (shippingSection) {
-                shippingSection.appendChild(container);
-            } else {
-                const checkoutForm = document.querySelector('.wp-block-woocommerce-checkout');
-                if (checkoutForm) {
-                    checkoutForm.appendChild(container);
+            // Find the CDEK shipping option and insert container right after it
+            const cdekRadio = document.querySelector('input[value*="cdek_shipping"]:checked');
+            if (cdekRadio) {
+                const radioContainer = cdekRadio.closest('.wc-block-components-radio-control');
+                if (radioContainer) {
+                    radioContainer.parentNode.insertBefore(container, radioContainer.nextSibling);
+                } else {
+                    insertInDefaultLocation(container);
                 }
+            } else {
+                insertInDefaultLocation(container);
             }
             
             // Initialize map
             setTimeout(initCdekMap, 100);
         } else {
             container.style.display = 'block';
+        }
+    }
+
+    // Insert container in default location
+    function insertInDefaultLocation(container) {
+        const shippingSection = document.querySelector('.wc-block-checkout__shipping-option');
+        if (shippingSection) {
+            shippingSection.appendChild(container);
+        } else {
+            const checkoutForm = document.querySelector('.wp-block-woocommerce-checkout');
+            if (checkoutForm) {
+                checkoutForm.appendChild(container);
+            }
         }
     }
 
