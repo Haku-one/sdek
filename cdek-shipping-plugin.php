@@ -29,6 +29,33 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
     return;
 }
 
+// Autoload classes
+function cdek_shipping_autoload($class_name) {
+    // Only load our classes
+    if (strpos($class_name, 'CDEK_') === 0) {
+        $class_file = str_replace('_', '-', strtolower($class_name));
+        $file_path = plugin_dir_path(__FILE__) . 'includes/class-' . $class_file . '.php';
+        
+        if (file_exists($file_path) && is_readable($file_path)) {
+            require_once $file_path;
+            
+            // Debug log (remove in production)
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("CDEK Plugin: Loaded class {$class_name} from {$file_path}");
+            }
+        } else {
+            // Debug log (remove in production)
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("CDEK Plugin: Could not load class {$class_name}, file not found: {$file_path}");
+            }
+        }
+    }
+}
+
+if (function_exists('cdek_shipping_autoload')) {
+    spl_autoload_register('cdek_shipping_autoload');
+}
+
 /**
  * Main plugin class
  */
@@ -74,7 +101,7 @@ class CDEK_Shipping_Plugin {
     }
     
     public function shipping_init() {
-        require_once CDEK_SHIPPING_PLUGIN_PATH . 'includes/class-cdek-shipping-method.php';
+        // Classes are auto-loaded
     }
     
     public function add_shipping_method($methods) {
@@ -179,7 +206,6 @@ class CDEK_Shipping_Plugin {
         
         $city = sanitize_text_field($_POST['city']);
         
-        require_once CDEK_SHIPPING_PLUGIN_PATH . 'includes/class-cdek-api.php';
         $cdek_api = new CDEK_API();
         $pickup_points = $cdek_api->get_pickup_points($city);
         
@@ -335,7 +361,6 @@ class CDEK_Shipping_Plugin {
             return new WP_Error('no_city', 'Город не указан', array('status' => 400));
         }
         
-        require_once CDEK_SHIPPING_PLUGIN_PATH . 'includes/class-cdek-api.php';
         $cdek_api = new CDEK_API();
         $pickup_points = $cdek_api->get_pickup_points($city);
         
@@ -390,10 +415,19 @@ class CDEK_Shipping_Plugin {
     }
 }
 
-// Activation and deactivation hooks
-require_once CDEK_SHIPPING_PLUGIN_PATH . 'includes/class-cdek-activator.php';
+// Activation and deactivation hooks (manually loaded)
+if (!class_exists('CDEK_Activator')) {
+    require_once CDEK_SHIPPING_PLUGIN_PATH . 'includes/class-cdek-activator.php';
+}
 register_activation_hook(__FILE__, array('CDEK_Activator', 'activate'));
 register_deactivation_hook(__FILE__, array('CDEK_Activator', 'deactivate'));
+
+// Cleanup on plugin deactivation
+register_deactivation_hook(__FILE__, function() {
+    if (function_exists('cdek_shipping_autoload')) {
+        spl_autoload_unregister('cdek_shipping_autoload');
+    }
+});
 
 // Initialize the plugin
 new CDEK_Shipping_Plugin();

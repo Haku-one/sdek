@@ -80,6 +80,13 @@ class CDEK_Shipping_Method extends WC_Shipping_Method {
         }
         
         // Получаем код города назначения
+        if (!class_exists('CDEK_API')) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('CDEK Plugin: CDEK_API class not found in shipping method');
+            }
+            return;
+        }
+        
         $cdek_api = new CDEK_API();
         $to_city_code = $cdek_api->get_city_code($city);
         
