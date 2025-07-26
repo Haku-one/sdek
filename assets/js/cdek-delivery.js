@@ -4,12 +4,23 @@ jQuery(document).ready(function($) {
     var selectedPoint = null;
     
     // Инициализация карты при выборе доставки СДЭК
-    $(document).on('change', 'input[name="shipping_method[0]"]', function() {
+    $(document).on('change', 'input[name="shipping_method[0]"], input[name*="radio-control"], input[value*="cdek_delivery"]', function() {
         if ($(this).val().indexOf('cdek_delivery') !== -1) {
-            initCdekDelivery();
-        } else {
+            console.log('СДЭК: выбран метод доставки СДЭК');
+            setTimeout(function() {
+                initCdekDelivery();
+            }, 100);
+        } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1) {
             hideCdekMap();
         }
+    });
+    
+    // Дополнительная инициализация для блоков WooCommerce
+    $(document).on('click', 'input[value*="cdek_delivery"]', function() {
+        console.log('СДЭК: клик по методу доставки СДЭК');
+        setTimeout(function() {
+            initCdekDelivery();
+        }, 200);
     });
     
     // Отслеживание изменений в поле адреса
@@ -23,39 +34,49 @@ jQuery(document).ready(function($) {
     });
     
     function initCdekDelivery() {
+        console.log('СДЭК: инициализация доставки');
+        
         // Создаем контейнер для карты, если его нет
         if ($('#cdek-map-container').length === 0) {
             var mapHtml = `
-                <div id="cdek-map-container" style="margin-top: 20px;">
+                <div id="cdek-map-container" style="margin-top: 20px; display: block !important;">
                     <h4>Выберите пункт выдачи СДЭК на карте:</h4>
                     <div id="cdek-selected-point" style="margin-bottom: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; display: none;">
                         <strong>Выбранный пункт:</strong>
                         <div id="cdek-point-info"></div>
                     </div>
-                    <div id="cdek-map" style="width: 100%; height: 450px; border: 1px solid #ddd; border-radius: 6px;"></div>
+                    <div id="cdek-map" style="width: 100%; height: 450px; border: 1px solid #ddd; border-radius: 6px; display: block !important;"></div>
                     <p style="font-size: 14px; color: #666; margin-top: 10px;">
                         💡 Введите город в поле адреса выше, затем выберите пункт выдачи на карте
                     </p>
                 </div>
             `;
-            $('.wc-block-components-address-form').after(mapHtml);
+            
+            // Ищем разные возможные места для вставки
+            var insertAfter = $('.wc-block-components-address-form').length ? 
+                $('.wc-block-components-address-form') : 
+                $('.wp-block-woocommerce-checkout-shipping-address-block').length ?
+                $('.wp-block-woocommerce-checkout-shipping-address-block') :
+                $('.wc-block-components-shipping-rates-control').first();
+                
+            insertAfter.after(mapHtml);
         }
         
         $('#cdek-map-container').show();
         
-        // Инициализируем карту
-        if (typeof ymaps !== 'undefined') {
-            ymaps.ready(function() {
-                initYandexMap();
-            });
-        }
+        // Принудительно инициализируем карту
+        setTimeout(function() {
+            initYandexMap();
+        }, 500);
         
         // Поиск пунктов по текущему городу
         var currentAddress = $('#shipping-address_1').val();
         if (currentAddress) {
             var city = currentAddress.split(',')[0].trim();
             if (city.length > 2) {
-                searchCdekPoints(city);
+                setTimeout(function() {
+                    searchCdekPoints(city);
+                }, 1000);
             }
         }
     }
@@ -69,24 +90,43 @@ jQuery(document).ready(function($) {
             return; // Карта уже инициализирована
         }
         
-        // Проверяем что контейнер существует и видим
+        console.log('СДЭК: попытка инициализации карты');
+        
+        // Ждем готовности Яндекс.Карт
+        if (typeof ymaps === 'undefined') {
+            console.log('СДЭК: Яндекс.Карты не загружены, ждем...');
+            setTimeout(initYandexMap, 1000);
+            return;
+        }
+        
+        // Проверяем контейнер
         var mapContainer = document.getElementById('cdek-map');
-        if (!mapContainer || mapContainer.offsetWidth === 0) {
-            console.log('СДЭК: контейнер карты не готов, повторяем через 500мс');
+        if (!mapContainer) {
+            console.log('СДЭК: контейнер карты не найден');
             setTimeout(initYandexMap, 500);
             return;
         }
         
-        try {
-            cdekMap = new ymaps.Map('cdek-map', {
-                center: [55.753994, 37.622093], // Москва по умолчанию
-                zoom: 10,
-                controls: ['zoomControl', 'searchControl']
-            });
-            console.log('СДЭК: карта успешно инициализирована');
-        } catch (error) {
-            console.error('СДЭК: ошибка инициализации карты', error);
-        }
+        // Показываем контейнер принудительно
+        mapContainer.style.display = 'block';
+        mapContainer.style.width = '100%';
+        mapContainer.style.height = '450px';
+        
+        // Небольшая задержка для рендеринга
+        setTimeout(function() {
+            try {
+                ymaps.ready(function() {
+                    cdekMap = new ymaps.Map('cdek-map', {
+                        center: [55.753994, 37.622093], // Москва по умолчанию
+                        zoom: 10,
+                        controls: ['zoomControl', 'searchControl']
+                    });
+                    console.log('СДЭК: карта успешно инициализирована');
+                });
+            } catch (error) {
+                console.error('СДЭК: ошибка инициализации карты', error);
+            }
+        }, 100);
     }
     
     function searchCdekPoints(address) {
@@ -262,4 +302,35 @@ jQuery(document).ready(function($) {
             }
         `)
         .appendTo('head');
+        
+    // Наблюдатель за изменениями DOM для автоматической инициализации
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                // Проверяем наличие выбранного метода СДЭК
+                var cdekSelected = $('input[value*="cdek_delivery"]:checked');
+                if (cdekSelected.length > 0 && $('#cdek-map-container').length === 0) {
+                    console.log('СДЭК: обнаружен выбранный метод СДЭК, инициализируем');
+                    setTimeout(function() {
+                        initCdekDelivery();
+                    }, 500);
+                }
+            }
+        });
+    });
+    
+    // Запускаем наблюдатель
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    // Проверяем при загрузке страницы
+    setTimeout(function() {
+        var cdekSelected = $('input[value*="cdek_delivery"]:checked');
+        if (cdekSelected.length > 0) {
+            console.log('СДЭК: метод СДЭК уже выбран при загрузке');
+            initCdekDelivery();
+        }
+    }, 2000);
 });

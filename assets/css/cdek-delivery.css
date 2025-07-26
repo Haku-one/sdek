@@ -50,6 +50,30 @@
     display: none !important;
 }
 
+/* Скрытие лишних элементов доставки при выборе СДЭК */
+.wc-block-components-radio-control__option-checked input[value*="cdek_delivery"] ~ .wc-block-components-radio-control__option-layout .wc-block-components-radio-control__secondary-label,
+input[value*="cdek_delivery"]:checked ~ div .wc-block-components-radio-control__secondary-label,
+label:has(input[value*="cdek_delivery"]:checked) .wc-block-components-radio-control__secondary-label {
+    display: none !important;
+}
+
+/* Скрытие блока с ценой для СДЭК */
+.wc-block-components-shipping-rates-control__package:has(input[value*="cdek_delivery"]:checked) .wc-block-formatted-money-amount {
+    display: none !important;
+}
+
+/* Принудительное отображение контейнера карты */
+#cdek-map-container {
+    display: block !important;
+    visibility: visible !important;
+}
+
+#cdek-map {
+    display: block !important;
+    visibility: visible !important;
+    min-height: 450px !important;
+}
+
 /* Стилизация поля адреса */
 .wc-block-components-address-form__address_1 input {
     border-radius: 6px;
