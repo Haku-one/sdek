@@ -57,8 +57,24 @@ label:has(input[value*="cdek_delivery"]:checked) .wc-block-components-radio-cont
     display: none !important;
 }
 
-/* Скрытие блока с ценой для СДЭК */
-.wc-block-components-shipping-rates-control__package:has(input[value*="cdek_delivery"]:checked) .wc-block-formatted-money-amount {
+/* ПОЛНОЕ скрытие блока доставки СДЭК */
+.wc-block-components-shipping-rates-control__package:has(input[value*="cdek_delivery"]) {
+    display: none !important;
+}
+
+/* Альтернативный способ скрытия */
+.wc-block-components-shipping-rates-control:has(input[value*="cdek_delivery"]) {
+    display: none !important;
+}
+
+/* Скрытие для старых браузеров */
+input[value*="cdek_delivery"]:checked {
+    position: absolute !important;
+    left: -9999px !important;
+    opacity: 0 !important;
+}
+
+label:has(input[value*="cdek_delivery"]) {
     display: none !important;
 }
 

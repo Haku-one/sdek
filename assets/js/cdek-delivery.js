@@ -36,6 +36,9 @@ jQuery(document).ready(function($) {
     function initCdekDelivery() {
         console.log('СДЭК: инициализация доставки');
         
+        // СКРЫВАЕМ БЛОК ВЫБОРА ДОСТАВКИ СДЭК
+        hideCdekShippingBlock();
+        
         // Создаем контейнер для карты, если его нет
         if ($('#cdek-map-container').length === 0) {
             var mapHtml = `
@@ -85,16 +88,47 @@ jQuery(document).ready(function($) {
         $('#cdek-map-container').hide();
     }
     
+    function hideCdekShippingBlock() {
+        console.log('СДЭК: скрываем блок выбора доставки');
+        
+        // Скрываем все возможные блоки с СДЭК доставкой
+        $('input[value*="cdek_delivery"]').each(function() {
+            // Скрываем родительские контейнеры
+            $(this).closest('.wc-block-components-radio-control').hide();
+            $(this).closest('.wc-block-components-shipping-rates-control__package').hide();
+            $(this).closest('.wc-block-components-shipping-rates-control').hide();
+            $(this).closest('label').hide();
+            
+            // Дополнительно скрываем через CSS
+            $(this).css({
+                'display': 'none !important',
+                'visibility': 'hidden !important',
+                'position': 'absolute',
+                'left': '-9999px'
+            });
+            
+            console.log('СДЭК: скрыт элемент', this);
+        });
+        
+        // Скрываем по классам
+        $('.wc-block-components-shipping-rates-control__package').each(function() {
+            if ($(this).find('input[value*="cdek_delivery"]').length > 0) {
+                $(this).hide();
+            }
+        });
+    }
+    
     function initYandexMap() {
         if (cdekMap) {
-            return; // Карта уже инициализирована
+            console.log('СДЭК: карта уже инициализирована');
+            return;
         }
         
-        console.log('СДЭК: попытка инициализации карты');
+        console.log('СДЭК: начинаем инициализацию карты');
         
-        // Ждем готовности Яндекс.Карт
-        if (typeof ymaps === 'undefined') {
-            console.log('СДЭК: Яндекс.Карты не загружены, ждем...');
+        // Проверяем что ymaps загружен
+        if (typeof ymaps === 'undefined' || !ymaps.ready) {
+            console.log('СДЭК: Яндекс.Карты еще загружаются...');
             setTimeout(initYandexMap, 1000);
             return;
         }
@@ -102,31 +136,44 @@ jQuery(document).ready(function($) {
         // Проверяем контейнер
         var mapContainer = document.getElementById('cdek-map');
         if (!mapContainer) {
-            console.log('СДЭК: контейнер карты не найден');
+            console.log('СДЭК: контейнер карты не найден, ждем...');
             setTimeout(initYandexMap, 500);
             return;
         }
         
-        // Показываем контейнер принудительно
-        mapContainer.style.display = 'block';
-        mapContainer.style.width = '100%';
-        mapContainer.style.height = '450px';
+        // КРИТИЧНО: принудительно делаем контейнер видимым и с размерами
+        mapContainer.style.cssText = 'display: block !important; width: 100% !important; height: 450px !important; visibility: visible !important; position: relative !important;';
         
-        // Небольшая задержка для рендеринга
-        setTimeout(function() {
-            try {
+        // Ждем пока контейнер получит размеры
+        var checkContainer = function() {
+            if (mapContainer.offsetWidth > 0 && mapContainer.offsetHeight > 0) {
+                console.log('СДЭК: контейнер готов, размеры:', mapContainer.offsetWidth, 'x', mapContainer.offsetHeight);
+                
                 ymaps.ready(function() {
-                    cdekMap = new ymaps.Map('cdek-map', {
-                        center: [55.753994, 37.622093], // Москва по умолчанию
-                        zoom: 10,
-                        controls: ['zoomControl', 'searchControl']
-                    });
-                    console.log('СДЭК: карта успешно инициализирована');
+                    try {
+                        cdekMap = new ymaps.Map(mapContainer, {
+                            center: [55.753994, 37.622093],
+                            zoom: 10,
+                            controls: ['zoomControl', 'searchControl']
+                        });
+                        console.log('СДЭК: ✅ карта успешно создана!');
+                    } catch (error) {
+                        console.error('СДЭК: ❌ ошибка создания карты:', error);
+                        // Попробуем еще раз через секунду
+                        setTimeout(function() {
+                            cdekMap = null;
+                            initYandexMap();
+                        }, 1000);
+                    }
                 });
-            } catch (error) {
-                console.error('СДЭК: ошибка инициализации карты', error);
+            } else {
+                console.log('СДЭК: контейнер еще без размеров, ждем...');
+                setTimeout(checkContainer, 300);
             }
-        }, 100);
+        };
+        
+        // Небольшая задержка для рендеринга DOM
+        setTimeout(checkContainer, 200);
     }
     
     function searchCdekPoints(address) {
@@ -152,9 +199,9 @@ jQuery(document).ready(function($) {
     function displayCdekPoints(points) {
         cdekPoints = points;
         
-        if (!cdekMap) {
-            console.log('СДЭК: карта не инициализирована, инициализируем');
-            initYandexMap();
+        // Проверяем что карта и ymaps готовы
+        if (!cdekMap || typeof ymaps === 'undefined') {
+            console.log('СДЭК: карта не готова, отложим отображение точек');
             setTimeout(function() {
                 displayCdekPoints(points);
             }, 1000);
@@ -307,13 +354,20 @@ jQuery(document).ready(function($) {
     var observer = new MutationObserver(function(mutations) {
         mutations.forEach(function(mutation) {
             if (mutation.type === 'childList') {
-                // Проверяем наличие выбранного метода СДЭК
-                var cdekSelected = $('input[value*="cdek_delivery"]:checked');
-                if (cdekSelected.length > 0 && $('#cdek-map-container').length === 0) {
-                    console.log('СДЭК: обнаружен выбранный метод СДЭК, инициализируем');
-                    setTimeout(function() {
-                        initCdekDelivery();
-                    }, 500);
+                // Проверяем наличие метода СДЭК (выбранного или нет)
+                var cdekMethod = $('input[value*="cdek_delivery"]');
+                if (cdekMethod.length > 0) {
+                    // Всегда скрываем блок выбора СДЭК
+                    hideCdekShippingBlock();
+                    
+                    // Если СДЭК выбран и карты нет - инициализируем
+                    var cdekSelected = $('input[value*="cdek_delivery"]:checked');
+                    if (cdekSelected.length > 0 && $('#cdek-map-container').length === 0) {
+                        console.log('СДЭК: обнаружен выбранный метод СДЭК, инициализируем');
+                        setTimeout(function() {
+                            initCdekDelivery();
+                        }, 500);
+                    }
                 }
             }
         });
@@ -327,6 +381,13 @@ jQuery(document).ready(function($) {
     
     // Проверяем при загрузке страницы
     setTimeout(function() {
+        // Всегда скрываем блок СДЭК при загрузке
+        var cdekMethod = $('input[value*="cdek_delivery"]');
+        if (cdekMethod.length > 0) {
+            hideCdekShippingBlock();
+        }
+        
+        // Если СДЭК выбран - инициализируем карту
         var cdekSelected = $('input[value*="cdek_delivery"]:checked');
         if (cdekSelected.length > 0) {
             console.log('СДЭК: метод СДЭК уже выбран при загрузке');
