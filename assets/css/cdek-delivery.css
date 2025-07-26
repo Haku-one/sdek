@@ -79,15 +79,29 @@ label:has(input[value*="cdek_delivery"]) {
 }
 
 /* Принудительное отображение контейнера карты */
-#cdek-map-container {
+#cdek-map-container,
+.wp-block-cdek-checkout-map-block #cdek-map-container {
     display: block !important;
     visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    z-index: 1 !important;
 }
 
-#cdek-map {
+#cdek-map,
+.wp-block-cdek-checkout-map-block #cdek-map {
     display: block !important;
     visibility: visible !important;
     min-height: 450px !important;
+    width: 100% !important;
+    position: relative !important;
+}
+
+/* Показываем специальный блок карты */
+.wp-block-cdek-checkout-map-block {
+    display: block !important;
+    visibility: visible !important;
+    min-height: 500px !important;
 }
 
 /* Стилизация поля адреса */

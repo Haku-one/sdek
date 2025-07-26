@@ -33,61 +33,6 @@ jQuery(document).ready(function($) {
         }
     });
     
-    function initCdekDelivery() {
-        console.log('СДЭК: инициализация доставки');
-        
-        // СКРЫВАЕМ БЛОК ВЫБОРА ДОСТАВКИ СДЭК
-        hideCdekShippingBlock();
-        
-        // Создаем контейнер для карты, если его нет
-        if ($('#cdek-map-container').length === 0) {
-            var mapHtml = `
-                <div id="cdek-map-container" style="margin-top: 20px; display: block !important;">
-                    <h4>Выберите пункт выдачи СДЭК на карте:</h4>
-                    <div id="cdek-selected-point" style="margin-bottom: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; display: none;">
-                        <strong>Выбранный пункт:</strong>
-                        <div id="cdek-point-info"></div>
-                    </div>
-                    <div id="cdek-map" style="width: 100%; height: 450px; border: 1px solid #ddd; border-radius: 6px; display: block !important;"></div>
-                    <p style="font-size: 14px; color: #666; margin-top: 10px;">
-                        💡 Введите город в поле адреса выше, затем выберите пункт выдачи на карте
-                    </p>
-                </div>
-            `;
-            
-            // Ищем разные возможные места для вставки
-            var insertAfter = $('.wc-block-components-address-form').length ? 
-                $('.wc-block-components-address-form') : 
-                $('.wp-block-woocommerce-checkout-shipping-address-block').length ?
-                $('.wp-block-woocommerce-checkout-shipping-address-block') :
-                $('.wc-block-components-shipping-rates-control').first();
-                
-            insertAfter.after(mapHtml);
-        }
-        
-        $('#cdek-map-container').show();
-        
-        // Принудительно инициализируем карту
-        setTimeout(function() {
-            initYandexMap();
-        }, 500);
-        
-        // Поиск пунктов по текущему городу
-        var currentAddress = $('#shipping-address_1').val();
-        if (currentAddress) {
-            var city = currentAddress.split(',')[0].trim();
-            if (city.length > 2) {
-                setTimeout(function() {
-                    searchCdekPoints(city);
-                }, 1000);
-            }
-        }
-    }
-    
-    function hideCdekMap() {
-        $('#cdek-map-container').hide();
-    }
-    
     function hideCdekShippingBlock() {
         console.log('СДЭК: скрываем блок выбора доставки');
         
@@ -116,6 +61,73 @@ jQuery(document).ready(function($) {
                 $(this).hide();
             }
         });
+    }
+
+    function initCdekDelivery() {
+        console.log('СДЭК: инициализация доставки');
+        
+        // СКРЫВАЕМ БЛОК ВЫБОРА ДОСТАВКИ СДЭК
+        hideCdekShippingBlock();
+        
+        // Создаем контейнер для карты, если его нет
+        if ($('#cdek-map-container').length === 0) {
+            var mapHtml = `
+                <div id="cdek-map-container" style="margin-top: 20px; display: block !important;">
+                    <h4>Выберите пункт выдачи СДЭК на карте:</h4>
+                    <div id="cdek-selected-point" style="margin-bottom: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; display: none;">
+                        <strong>Выбранный пункт:</strong>
+                        <div id="cdek-point-info"></div>
+                    </div>
+                    <div id="cdek-map" style="width: 100%; height: 450px; border: 1px solid #ddd; border-radius: 6px; display: block !important;"></div>
+                    <p style="font-size: 14px; color: #666; margin-top: 10px;">
+                        💡 Введите город в поле адреса выше, затем выберите пункт выдачи на карте
+                    </p>
+                </div>
+            `;
+            
+            // Ищем специальный блок для карты или места для вставки
+            var mapBlock = $('.wp-block-cdek-checkout-map-block');
+            var insertTarget = null;
+            
+            if (mapBlock.length > 0) {
+                // Есть специальный блок для карты
+                insertTarget = mapBlock;
+                insertTarget.html(mapHtml);
+                console.log('СДЭК: карта вставлена в специальный блок');
+            } else {
+                // Ищем другие места для вставки
+                insertTarget = $('.wc-block-components-address-form').length ? 
+                    $('.wc-block-components-address-form') : 
+                    $('.wp-block-woocommerce-checkout-shipping-address-block').length ?
+                    $('.wp-block-woocommerce-checkout-shipping-address-block') :
+                    $('.wc-block-components-shipping-rates-control').first();
+                    
+                insertTarget.after(mapHtml);
+                console.log('СДЭК: карта вставлена после', insertTarget[0]);
+            }
+        }
+        
+        $('#cdek-map-container').show();
+        
+        // Принудительно инициализируем карту
+        setTimeout(function() {
+            initYandexMap();
+        }, 500);
+        
+        // Поиск пунктов по текущему городу
+        var currentAddress = $('#shipping-address_1').val();
+        if (currentAddress) {
+            var city = currentAddress.split(',')[0].trim();
+            if (city.length > 2) {
+                setTimeout(function() {
+                    searchCdekPoints(city);
+                }, 1000);
+            }
+        }
+    }
+    
+    function hideCdekMap() {
+        $('#cdek-map-container').hide();
     }
     
     function initYandexMap() {
@@ -385,13 +397,18 @@ jQuery(document).ready(function($) {
         var cdekMethod = $('input[value*="cdek_delivery"]');
         if (cdekMethod.length > 0) {
             hideCdekShippingBlock();
-        }
-        
-        // Если СДЭК выбран - инициализируем карту
-        var cdekSelected = $('input[value*="cdek_delivery"]:checked');
-        if (cdekSelected.length > 0) {
-            console.log('СДЭК: метод СДЭК уже выбран при загрузке');
+            
+            // ПРИНУДИТЕЛЬНО инициализируем карту если есть метод СДЭК
+            console.log('СДЭК: найден метод СДЭК, принудительно инициализируем карту');
             initCdekDelivery();
         }
     }, 2000);
+    
+    // Дополнительная проверка через больший интервал
+    setTimeout(function() {
+        if ($('input[value*="cdek_delivery"]').length > 0 && $('#cdek-map-container').length === 0) {
+            console.log('СДЭК: повторная принудительная инициализация');
+            initCdekDelivery();
+        }
+    }, 4000);
 });
