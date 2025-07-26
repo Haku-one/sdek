@@ -39,10 +39,13 @@ class CDEK_Shipping_Plugin {
         add_action('woocommerce_shipping_init', array($this, 'shipping_init'));
         add_filter('woocommerce_shipping_methods', array($this, 'add_shipping_method'));
         
-        // Hook to modify checkout fields
+        // Hook to modify checkout fields (both classic and block checkout)
         add_filter('woocommerce_checkout_fields', array($this, 'modify_checkout_fields'));
         add_filter('woocommerce_billing_fields', array($this, 'modify_billing_fields'));
         add_filter('woocommerce_shipping_fields', array($this, 'modify_shipping_fields'));
+        
+        // Block checkout support
+        add_action('woocommerce_blocks_loaded', array($this, 'register_checkout_block_integration'));
         
         // Enqueue scripts and styles
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
@@ -54,6 +57,16 @@ class CDEK_Shipping_Plugin {
         
         // Admin settings
         add_action('admin_menu', array($this, 'add_admin_menu'));
+        
+        // Store API integration
+        add_action('woocommerce_store_api_validate_add_to_cart', array($this, 'store_api_validate'), 10, 2);
+        
+        // REST API support
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
+        
+        // Save pickup point data
+        add_action('woocommerce_checkout_update_order_meta', array($this, 'save_pickup_point_data'));
+        add_action('woocommerce_admin_order_data_after_shipping_address', array($this, 'display_pickup_point_in_admin'));
     }
     
     public function init() {
@@ -228,6 +241,151 @@ class CDEK_Shipping_Plugin {
         } else {
             $error_msg = isset($data['error_description']) ? $data['error_description'] : 'Неизвестная ошибка';
             wp_send_json_error(array('message' => 'Ошибка авторизации: ' . $error_msg));
+        }
+    }
+    
+    public function register_checkout_block_integration() {
+        if (class_exists('Automattic\\WooCommerce\\Blocks\\Integrations\\IntegrationRegistry')) {
+            add_action(
+                'woocommerce_blocks_checkout_enqueue_data',
+                array($this, 'add_checkout_data')
+            );
+            
+            add_action(
+                'wp_enqueue_scripts',
+                array($this, 'enqueue_checkout_block_assets')
+            );
+        }
+    }
+    
+    public function add_checkout_data() {
+        if (is_admin() || !wp_script_is('wc-checkout-frontend', 'enqueued')) {
+            return;
+        }
+        
+        wp_add_inline_script(
+            'wc-checkout-frontend',
+            'window.cdek_checkout_params = ' . wp_json_encode(array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'rest_url' => rest_url('cdek/v1/'),
+                'nonce' => wp_create_nonce('cdek_nonce'),
+                'yandex_api_key' => get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10e-8ab18f0f3702'),
+            )),
+            'before'
+        );
+    }
+    
+    public function enqueue_checkout_block_assets() {
+        if (has_block('woocommerce/checkout') || is_checkout()) {
+            // Enqueue block checkout script
+            wp_enqueue_script(
+                'cdek-checkout-block',
+                CDEK_SHIPPING_PLUGIN_URL . 'assets/js/cdek-checkout-block.js',
+                array('wp-element', 'wp-html-entities'),
+                CDEK_SHIPPING_VERSION,
+                true
+            );
+            
+            // Enqueue block checkout styles
+            wp_enqueue_style(
+                'cdek-checkout-block',
+                CDEK_SHIPPING_PLUGIN_URL . 'assets/css/cdek-checkout-block.css',
+                array(),
+                CDEK_SHIPPING_VERSION
+            );
+            
+            // Yandex Maps API
+            $yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10e-8ab18f0f3702');
+            wp_enqueue_script(
+                'yandex-maps',
+                'https://api-maps.yandex.ru/2.1/?apikey=' . $yandex_api_key . '&lang=ru_RU',
+                array(),
+                null,
+                true
+            );
+            
+            // Add checkout params
+            wp_localize_script('cdek-checkout-block', 'cdek_checkout_params', array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'rest_url' => rest_url('cdek/v1/'),
+                'nonce' => wp_create_nonce('cdek_nonce'),
+                'yandex_api_key' => $yandex_api_key,
+            ));
+        }
+    }
+    
+    public function register_rest_routes() {
+        register_rest_route('cdek/v1', '/pickup-points', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'rest_get_pickup_points'),
+            'permission_callback' => '__return_true',
+            'args' => array(
+                'city' => array(
+                    'required' => true,
+                    'sanitize_callback' => 'sanitize_text_field',
+                ),
+            ),
+        ));
+    }
+    
+    public function rest_get_pickup_points($request) {
+        $city = $request->get_param('city');
+        
+        if (empty($city)) {
+            return new WP_Error('no_city', 'Город не указан', array('status' => 400));
+        }
+        
+        require_once CDEK_SHIPPING_PLUGIN_PATH . 'includes/class-cdek-api.php';
+        $cdek_api = new CDEK_API();
+        $pickup_points = $cdek_api->get_pickup_points($city);
+        
+        return rest_ensure_response($pickup_points);
+    }
+    
+    public function store_api_validate($errors, $request) {
+        // Validation for Store API if needed
+        return $errors;
+    }
+    
+    public function save_pickup_point_data($order_id) {
+        if (!empty($_POST['cdek_selected_pickup_point'])) {
+            $pickup_point_data = sanitize_text_field($_POST['cdek_selected_pickup_point']);
+            $pickup_point = json_decode(stripslashes($pickup_point_data), true);
+            
+            if ($pickup_point && isset($pickup_point['name'])) {
+                update_post_meta($order_id, '_cdek_pickup_point', $pickup_point);
+                update_post_meta($order_id, '_cdek_pickup_point_name', $pickup_point['name']);
+                
+                if (isset($pickup_point['location']['address_full'])) {
+                    update_post_meta($order_id, '_cdek_pickup_point_address', $pickup_point['location']['address_full']);
+                }
+            }
+        }
+    }
+    
+    public function display_pickup_point_in_admin($order) {
+        $pickup_point = get_post_meta($order->get_id(), '_cdek_pickup_point', true);
+        
+        if ($pickup_point && isset($pickup_point['name'])) {
+            echo '<h3>Пункт выдачи СДЭК</h3>';
+            echo '<p><strong>' . esc_html($pickup_point['name']) . '</strong></p>';
+            
+            if (isset($pickup_point['location']['address_full'])) {
+                echo '<p>' . esc_html($pickup_point['location']['address_full']) . '</p>';
+            }
+            
+            if (isset($pickup_point['work_time']) && is_array($pickup_point['work_time'])) {
+                echo '<p><strong>Время работы:</strong></p>';
+                echo '<ul>';
+                $days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+                foreach ($pickup_point['work_time'] as $schedule) {
+                    if (isset($schedule['day']) && isset($schedule['time'])) {
+                        $day_name = isset($days[$schedule['day'] - 1]) ? $days[$schedule['day'] - 1] : $schedule['day'];
+                        echo '<li>' . esc_html($day_name . ': ' . $schedule['time']) . '</li>';
+                    }
+                }
+                echo '</ul>';
+            }
         }
     }
 }
