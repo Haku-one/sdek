@@ -89,8 +89,8 @@ class CdekDeliveryPlugin {
         unset($fields['shipping']['shipping_postcode']);
         
         // Меняем метку для поля адреса
-        $fields['shipping']['shipping_address_1']['label'] = 'Адрес (город, улица, дом)';
-        $fields['shipping']['shipping_address_1']['placeholder'] = 'Например: Москва, ул. Ленина, д. 1';
+        $fields['shipping']['shipping_address_1']['label'] = 'Город доставки';
+        $fields['shipping']['shipping_address_1']['placeholder'] = 'Например: Москва';
         
         return $fields;
     }
@@ -102,8 +102,8 @@ class CdekDeliveryPlugin {
         unset($fields['postcode']);
         
         // Настраиваем поле адреса
-        $fields['address_1']['label'] = 'Адрес (город, улица, дом)';
-        $fields['address_1']['placeholder'] = 'Например: Москва, ул. Ленина, д. 1';
+        $fields['address_1']['label'] = 'Город доставки';
+        $fields['address_1']['placeholder'] = 'Например: Москва';
         
         return $fields;
     }

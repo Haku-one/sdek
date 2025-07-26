@@ -15,8 +15,10 @@ jQuery(document).ready(function($) {
     // Отслеживание изменений в поле адреса
     $(document).on('input', '#shipping-address_1', function() {
         var address = $(this).val();
-        if (address.length > 5) {
-            searchCdekPoints(address);
+        // Извлекаем город из адреса (первое слово до запятой)
+        var city = address.split(',')[0].trim();
+        if (city.length > 2) {
+            searchCdekPoints(city);
         }
     });
     
@@ -25,13 +27,15 @@ jQuery(document).ready(function($) {
         if ($('#cdek-map-container').length === 0) {
             var mapHtml = `
                 <div id="cdek-map-container" style="margin-top: 20px;">
-                    <h4>Выберите пункт выдачи СДЭК:</h4>
+                    <h4>Выберите пункт выдачи СДЭК на карте:</h4>
                     <div id="cdek-selected-point" style="margin-bottom: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; display: none;">
                         <strong>Выбранный пункт:</strong>
                         <div id="cdek-point-info"></div>
                     </div>
-                    <div id="cdek-map" style="width: 100%; height: 400px; border: 1px solid #ddd;"></div>
-                    <div id="cdek-points-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
+                    <div id="cdek-map" style="width: 100%; height: 450px; border: 1px solid #ddd; border-radius: 6px;"></div>
+                    <p style="font-size: 14px; color: #666; margin-top: 10px;">
+                        💡 Введите город в поле адреса выше, затем выберите пункт выдачи на карте
+                    </p>
                 </div>
             `;
             $('.wc-block-components-address-form').after(mapHtml);
@@ -46,10 +50,13 @@ jQuery(document).ready(function($) {
             });
         }
         
-        // Поиск пунктов по текущему адресу
+        // Поиск пунктов по текущему городу
         var currentAddress = $('#shipping-address_1').val();
         if (currentAddress) {
-            searchCdekPoints(currentAddress);
+            var city = currentAddress.split(',')[0].trim();
+            if (city.length > 2) {
+                searchCdekPoints(city);
+            }
         }
     }
     
@@ -62,11 +69,24 @@ jQuery(document).ready(function($) {
             return; // Карта уже инициализирована
         }
         
-        cdekMap = new ymaps.Map('cdek-map', {
-            center: [55.753994, 37.622093], // Москва по умолчанию
-            zoom: 10,
-            controls: ['zoomControl', 'searchControl']
-        });
+        // Проверяем что контейнер существует и видим
+        var mapContainer = document.getElementById('cdek-map');
+        if (!mapContainer || mapContainer.offsetWidth === 0) {
+            console.log('СДЭК: контейнер карты не готов, повторяем через 500мс');
+            setTimeout(initYandexMap, 500);
+            return;
+        }
+        
+        try {
+            cdekMap = new ymaps.Map('cdek-map', {
+                center: [55.753994, 37.622093], // Москва по умолчанию
+                zoom: 10,
+                controls: ['zoomControl', 'searchControl']
+            });
+            console.log('СДЭК: карта успешно инициализирована');
+        } catch (error) {
+            console.error('СДЭК: ошибка инициализации карты', error);
+        }
     }
     
     function searchCdekPoints(address) {
@@ -93,6 +113,7 @@ jQuery(document).ready(function($) {
         cdekPoints = points;
         
         if (!cdekMap) {
+            console.log('СДЭК: карта не инициализирована, инициализируем');
             initYandexMap();
             setTimeout(function() {
                 displayCdekPoints(points);
@@ -103,16 +124,22 @@ jQuery(document).ready(function($) {
         // Очищаем предыдущие метки
         cdekMap.geoObjects.removeAll();
         
-        // Очищаем список пунктов
-        $('#cdek-points-list').empty();
-        
         if (!points || points.length === 0) {
-            $('#cdek-points-list').html('<p>Пункты выдачи не найдены</p>');
+            console.log('СДЭК: пункты выдачи не найдены');
+            // Показываем сообщение на карте
+            var noPointsPlacemark = new ymaps.Placemark([55.753994, 37.622093], {
+                balloonContent: 'Пункты выдачи в указанном городе не найдены'
+            }, {
+                preset: 'islands#grayIcon'
+            });
+            cdekMap.geoObjects.add(noPointsPlacemark);
+            cdekMap.setCenter([55.753994, 37.622093], 10);
             return;
         }
         
+        console.log('СДЭК: отображаем ' + points.length + ' пунктов выдачи');
+        
         var bounds = [];
-        var pointsListHtml = '<h5>Список пунктов выдачи:</h5>';
         
         points.forEach(function(point, index) {
             if (point.location && point.location.latitude && point.location.longitude) {
@@ -133,26 +160,6 @@ jQuery(document).ready(function($) {
                 });
                 
                 cdekMap.geoObjects.add(placemark);
-                
-                // Добавляем в список
-                pointsListHtml += `
-                    <div class="cdek-point-item" data-point-code="${point.code}" style="border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; cursor: pointer; border-radius: 4px;">
-                        <strong>${point.name}</strong><br>
-                        <small>${point.location.address_full}</small><br>
-                        <small>Режим работы: ${formatWorkTime(point.work_time)}</small>
-                    </div>
-                `;
-            }
-        });
-        
-        $('#cdek-points-list').html(pointsListHtml);
-        
-        // Обработчики клика по пунктам в списке
-        $('.cdek-point-item').click(function() {
-            var pointCode = $(this).data('point-code');
-            var point = cdekPoints.find(p => p.code === pointCode);
-            if (point) {
-                selectCdekPoint(point);
             }
         });
         
@@ -160,7 +167,7 @@ jQuery(document).ready(function($) {
         if (bounds.length > 0) {
             cdekMap.setBounds(bounds, {
                 checkZoomRange: true,
-                zoomMargin: 20
+                zoomMargin: 30
             });
         }
     }
@@ -168,13 +175,16 @@ jQuery(document).ready(function($) {
     function selectCdekPoint(point) {
         selectedPoint = point;
         
+        console.log('СДЭК: выбран пункт выдачи', point.name);
+        
         // Показываем информацию о выбранном пункте
         $('#cdek-point-info').html(formatPointInfo(point));
         $('#cdek-selected-point').show();
         
-        // Выделяем выбранный пункт в списке
-        $('.cdek-point-item').removeClass('selected');
-        $(`.cdek-point-item[data-point-code="${point.code}"]`).addClass('selected');
+        // Центрируем карту на выбранном пункте
+        if (cdekMap && point.location) {
+            cdekMap.setCenter([point.location.latitude, point.location.longitude], 15);
+        }
         
         // Сохраняем выбранный пункт в скрытое поле для отправки с формой
         if ($('#cdek-selected-point-code').length === 0) {
@@ -183,7 +193,7 @@ jQuery(document).ready(function($) {
                 id: 'cdek-selected-point-code',
                 name: 'cdek_selected_point_code',
                 value: point.code
-            }).appendTo('form.checkout');
+            }).appendTo('form.checkout, form.woocommerce-checkout');
         } else {
             $('#cdek-selected-point-code').val(point.code);
         }
@@ -195,7 +205,7 @@ jQuery(document).ready(function($) {
                 id: 'cdek-selected-point-data',
                 name: 'cdek_selected_point_data',
                 value: JSON.stringify(point)
-            }).appendTo('form.checkout');
+            }).appendTo('form.checkout, form.woocommerce-checkout');
         } else {
             $('#cdek-selected-point-data').val(JSON.stringify(point));
         }

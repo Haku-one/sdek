@@ -17,8 +17,8 @@
                     
                     // Модифицируем поле адреса
                     if ( fields.shipping.address_1 ) {
-                        fields.shipping.address_1.label = 'Адрес (город, улица, дом)';
-                        fields.shipping.address_1.placeholder = 'Например: Москва, ул. Ленина, д. 1';
+                        fields.shipping.address_1.label = 'Город доставки';
+                        fields.shipping.address_1.placeholder = 'Например: Москва';
                     }
                 }
                 
@@ -85,8 +85,9 @@
         document.addEventListener('input', function(e) {
             if (e.target.id === 'shipping-address_1' || e.target.name === 'shipping_address_1') {
                 const address = e.target.value;
-                if (address.length > 5) {
-                    searchCdekPoints(address);
+                const city = address.split(',')[0].trim();
+                if (city.length > 2) {
+                    searchCdekPoints(city);
                 }
             }
         });

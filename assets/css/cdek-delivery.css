@@ -41,62 +41,7 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-#cdek-points-list {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #e1e1e1;
-    border-radius: 6px;
-    padding: 10px;
-    background: #f9f9f9;
-}
-
-.cdek-point-item {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 12px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    position: relative;
-}
-
-.cdek-point-item:hover {
-    background-color: #f5f5f5;
-    border-color: #bbb;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-}
-
-.cdek-point-item.selected {
-    background-color: #e7f3ff !important;
-    border-color: #007cba !important;
-    box-shadow: 0 2px 8px rgba(0,124,186,0.2);
-}
-
-.cdek-point-item.selected::after {
-    content: '✓';
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    color: #007cba;
-    font-weight: bold;
-    font-size: 16px;
-}
-
-.cdek-point-item strong {
-    color: #333;
-    font-size: 14px;
-    display: block;
-    margin-bottom: 4px;
-}
-
-.cdek-point-item small {
-    color: #666;
-    font-size: 12px;
-    line-height: 1.4;
-    display: block;
-}
+/* Список пунктов убран - используется только карта */
 
 /* Скрытие ненужных полей в форме доставки */
 .wc-block-components-address-form__city,
@@ -128,15 +73,7 @@
     }
     
     #cdek-map {
-        height: 300px !important;
-    }
-    
-    #cdek-points-list {
-        max-height: 200px;
-    }
-    
-    .cdek-point-item {
-        padding: 10px;
+        height: 350px !important;
     }
 }
 
