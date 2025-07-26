@@ -1,0 +1,198 @@
+/* СДЭК Доставка - Стили */
+
+#cdek-map-container {
+    background: #fff;
+    border: 1px solid #e1e1e1;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#cdek-map-container h4 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+#cdek-map-container h5 {
+    margin: 15px 0 10px 0;
+    color: #555;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+#cdek-selected-point {
+    background: #e8f5e8 !important;
+    border: 1px solid #4caf50 !important;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+#cdek-selected-point strong {
+    color: #2e7d32;
+}
+
+#cdek-map {
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+#cdek-points-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e1e1e1;
+    border-radius: 6px;
+    padding: 10px;
+    background: #f9f9f9;
+}
+
+.cdek-point-item {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.cdek-point-item:hover {
+    background-color: #f5f5f5;
+    border-color: #bbb;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.cdek-point-item.selected {
+    background-color: #e7f3ff !important;
+    border-color: #007cba !important;
+    box-shadow: 0 2px 8px rgba(0,124,186,0.2);
+}
+
+.cdek-point-item.selected::after {
+    content: '✓';
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    color: #007cba;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.cdek-point-item strong {
+    color: #333;
+    font-size: 14px;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.cdek-point-item small {
+    color: #666;
+    font-size: 12px;
+    line-height: 1.4;
+    display: block;
+}
+
+/* Скрытие ненужных полей в форме доставки */
+.wc-block-components-address-form__city,
+.wc-block-components-address-form__state,
+.wc-block-components-address-form__postcode {
+    display: none !important;
+}
+
+/* Стилизация поля адреса */
+.wc-block-components-address-form__address_1 input {
+    border-radius: 6px;
+    border: 2px solid #e1e1e1;
+    padding: 12px 15px;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+}
+
+.wc-block-components-address-form__address_1 input:focus {
+    border-color: #007cba;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0,124,186,0.1);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    #cdek-map-container {
+        padding: 15px;
+        margin: 15px 0;
+    }
+    
+    #cdek-map {
+        height: 300px !important;
+    }
+    
+    #cdek-points-list {
+        max-height: 200px;
+    }
+    
+    .cdek-point-item {
+        padding: 10px;
+    }
+}
+
+/* Кастомные стили для Яндекс.Карт */
+.ymaps-2-1-79-controls__control_toolbar_true {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 6px;
+}
+
+/* Анимация загрузки */
+.cdek-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+    background: #f9f9f9;
+    border-radius: 6px;
+}
+
+.cdek-loading::after {
+    content: '';
+    width: 30px;
+    height: 30px;
+    border: 3px solid #e1e1e1;
+    border-top: 3px solid #007cba;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Уведомления */
+.cdek-notice {
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+
+.cdek-notice.error {
+    background: #fff2f2;
+    border: 1px solid #ffcccb;
+    color: #d32f2f;
+}
+
+.cdek-notice.success {
+    background: #f0fff0;
+    border: 1px solid #90ee90;
+    color: #2e7d32;
+}
+
+.cdek-notice.info {
+    background: #e7f3ff;
+    border: 1px solid #87ceeb;
+    color: #1976d2;
+}
