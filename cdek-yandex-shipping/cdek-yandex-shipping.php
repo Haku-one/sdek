@@ -173,46 +173,51 @@ class WC_CDEK_Yandex_Shipping {
 
 new WC_CDEK_Yandex_Shipping();
 
-/**
- * Класс метода доставки WooCommerce.
- */
-class WC_Shipping_CDEK_Yandex extends WC_Shipping_Method {
-
-    public function __construct() {
-        $this->id                 = 'cdek_yandex';
-        $this->method_title       = __( 'CDEK доставка', 'wc-cdek-yandex' );
-        $this->method_description = __( 'Доставка через пункты выдачи СДЭК (PVZ).', 'wc-cdek-yandex' );
-        $this->enabled            = 'yes';
-        $this->title              = __( 'СДЭК (ПВЗ)', 'wc-cdek-yandex' );
-
-        $this->init();
+// Убираю прямое определение класса и переношу его в хук.
+add_action( 'woocommerce_shipping_init', 'wc_cdek_yandex_register_shipping_class', 0 );
+function wc_cdek_yandex_register_shipping_class() {
+    if ( ! class_exists( 'WC_Shipping_Method' ) || class_exists( 'WC_Shipping_CDEK_Yandex' ) ) {
+        return;
     }
 
-    /**
-     * Настройки отсутствуют, поэтому просто объявляем пустую форму.
-     */
-    public function init() {
-        $this->init_form_fields();
-    }
+    class WC_Shipping_CDEK_Yandex extends WC_Shipping_Method {
 
-    /**
-     * Настройки отсутствуют, форма пуста.
-     */
-    public function init_form_fields() {
-        $this->form_fields = [];
-    }
+        public function __construct() {
+            $this->id                 = 'cdek_yandex';
+            $this->method_title       = __( 'CDEK доставка', 'wc-cdek-yandex' );
+            $this->method_description = __( 'Доставка через пункты выдачи СДЭК (PVZ).', 'wc-cdek-yandex' );
+            $this->enabled            = 'yes';
+            $this->title              = __( 'СДЭК (ПВЗ)', 'wc-cdek-yandex' );
 
-    /**
-     * Вычисляем стоимость доставки (упрощённо — 0 ₽).
-     */
-    public function calculate_shipping( $package = [] ) {
-        $rate = [
-            'id'       => $this->id,
-            'label'    => $this->title,
-            'cost'     => 0,
-            'calc_tax' => 'per_order',
-        ];
+            $this->init();
+        }
 
-        $this->add_rate( $rate );
+        /**
+         * Настройки отсутствуют, поэтому просто объявляем пустую форму.
+         */
+        public function init() {
+            $this->init_form_fields();
+        }
+
+        /**
+         * Настройки отсутствуют, форма пуста.
+         */
+        public function init_form_fields() {
+            $this->form_fields = [];
+        }
+
+        /**
+         * Вычисляем стоимость доставки (упрощённо — 0 ₽).
+         */
+        public function calculate_shipping( $package = [] ) {
+            $rate = [
+                'id'       => $this->id,
+                'label'    => $this->title,
+                'cost'     => 0,
+                'calc_tax' => 'per_order',
+            ];
+
+            $this->add_rate( $rate );
+        }
     }
 }
