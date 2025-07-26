@@ -75,9 +75,24 @@ class CDEK_Shipping_Plugin {
     public function modify_checkout_fields($fields) {
         // Remove unnecessary shipping fields for CDEK delivery
         if (isset($fields['shipping'])) {
-            unset($fields['shipping']['shipping_city']);
             unset($fields['shipping']['shipping_state']);
             unset($fields['shipping']['shipping_postcode']);
+            
+            // Modify city field
+            if (isset($fields['shipping']['shipping_city'])) {
+                $fields['shipping']['shipping_city']['label'] = 'Город';
+                $fields['shipping']['shipping_city']['placeholder'] = 'Укажите город (например: Москва, Санкт-Петербург)';
+                $fields['shipping']['shipping_city']['class'] = array('form-row-wide', 'cdek-city-field');
+                $fields['shipping']['shipping_city']['required'] = true;
+                $fields['shipping']['shipping_city']['priority'] = 50;
+            }
+            
+            // Modify address field
+            if (isset($fields['shipping']['shipping_address_1'])) {
+                $fields['shipping']['shipping_address_1']['placeholder'] = 'Введите адрес (улица, дом)';
+                $fields['shipping']['shipping_address_1']['class'] = array('form-row-wide', 'cdek-address-field');
+                $fields['shipping']['shipping_address_1']['priority'] = 60;
+            }
         }
         
         return $fields;
@@ -89,15 +104,24 @@ class CDEK_Shipping_Plugin {
     }
     
     public function modify_shipping_fields($fields) {
-        // Remove city, state, postcode for shipping
-        unset($fields['shipping_city']);
+        // Remove state, postcode for shipping
         unset($fields['shipping_state']);
         unset($fields['shipping_postcode']);
         
-        // Modify address field to include city extraction
+        // Change city field to be more prominent and rename it
+        if (isset($fields['shipping_city'])) {
+            $fields['shipping_city']['label'] = 'Город';
+            $fields['shipping_city']['placeholder'] = 'Укажите город (например: Москва, Санкт-Петербург)';
+            $fields['shipping_city']['class'] = array('form-row-wide', 'cdek-city-field');
+            $fields['shipping_city']['required'] = true;
+            $fields['shipping_city']['priority'] = 50; // Show before address
+        }
+        
+        // Modify address field
         if (isset($fields['shipping_address_1'])) {
-            $fields['shipping_address_1']['placeholder'] = 'Введите полный адрес с городом (например: Москва, ул. Тверская д.1)';
+            $fields['shipping_address_1']['placeholder'] = 'Введите адрес (улица, дом)';
             $fields['shipping_address_1']['class'] = array('form-row-wide', 'cdek-address-field');
+            $fields['shipping_address_1']['priority'] = 60; // Show after city
         }
         
         return $fields;

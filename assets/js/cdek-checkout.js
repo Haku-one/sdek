@@ -11,39 +11,27 @@ jQuery(document).ready(function($) {
         }
 
         ymaps.ready(function() {
-            cdekMap = new ymaps.Map('cdek-map', {
-                center: [55.76, 37.64], // Москва по умолчанию
-                zoom: 10,
-                controls: ['zoomControl', 'searchControl']
-            });
+            const mapContainer = document.getElementById('cdek-map');
+            if (mapContainer) {
+                cdekMap = new ymaps.Map('cdek-map', {
+                    center: [55.76, 37.64], // Москва по умолчанию
+                    zoom: 10,
+                    controls: ['zoomControl', 'searchControl']
+                });
+            }
         });
     }
 
-    // Функция для извлечения города из адреса
-    function extractCityFromAddress(address) {
-        if (!address) return '';
+    // Функция для очистки названия города
+    function cleanCityName(city) {
+        if (!city) return '';
         
-        // Простые паттерны для извлечения города
-        const patterns = [
-            /^([А-Яа-яёЁ\s-]+),/,  // Город в начале перед запятой
-            /г\.?\s*([А-Яа-яёЁ\s-]+),/,  // г. Название города
-            /город\s+([А-Яа-яёЁ\s-]+),/i  // город Название
-        ];
-
-        for (let pattern of patterns) {
-            const match = address.match(pattern);
-            if (match) {
-                return match[1].trim();
-            }
-        }
-
-        // Fallback - первое слово до запятой
-        const parts = address.split(',');
-        if (parts.length > 1) {
-            return parts[0].trim();
-        }
-
-        return '';
+        // Убираем лишние слова и символы
+        city = city.trim();
+        city = city.replace(/^(г\.?|город)\s+/i, ''); // Убираем "г." или "город"
+        city = city.replace(/\s+/g, ' '); // Убираем лишние пробелы
+        
+        return city;
     }
 
     // Загрузка пунктов выдачи
@@ -240,17 +228,18 @@ jQuery(document).ready(function($) {
         $('#cdek-pickup-points-list').html(`<p class="error">${message}</p>`);
     }
 
-    // Отслеживание изменений в поле адреса
-    let addressTimeout;
-    $(document).on('input', '#shipping-address_1', function() {
-        const address = $(this).val();
-        const city = extractCityFromAddress(address);
+    // Отслеживание изменений в поле города
+    let cityTimeout;
+    $(document).on('input change', '#shipping-city, #shipping_city, input[name="shipping_city"]', function() {
+        const city = cleanCityName($(this).val());
         
-        clearTimeout(addressTimeout);
-        addressTimeout = setTimeout(function() {
+        clearTimeout(cityTimeout);
+        cityTimeout = setTimeout(function() {
             if (city && city.length > 2) {
                 loadPickupPoints(city);
                 showCdekMapContainer();
+            } else {
+                hideCdekMapContainer();
             }
         }, 1000);
     });
@@ -270,13 +259,26 @@ jQuery(document).ready(function($) {
                 </div>
             `;
             
-            $('#shipping .wc-block-components-address-form').after(container);
+            // Ищем подходящее место для вставки
+            const targetElement = $('#shipping .wc-block-components-address-form').length ? 
+                $('#shipping .wc-block-components-address-form') : 
+                $('#shipping');
             
-            // Инициализируем карту
-            initCdekMap();
+            targetElement.after(container);
+            
+            // Инициализируем карту с задержкой
+            setTimeout(initCdekMap, 100);
         } else {
             $('#cdek-pickup-container').show();
         }
+    }
+
+    // Скрыть контейнер с картой
+    function hideCdekMapContainer() {
+        $('#cdek-pickup-container').hide();
+        selectedPickupPoint = null;
+        $('#cdek-selected-pickup-point').val('');
+        $('#cdek-selected-point-info').empty();
     }
 
     // Скрыть контейнер при смене способа доставки
@@ -288,14 +290,20 @@ jQuery(document).ready(function($) {
     });
 
     // Инициализация при загрузке страницы
-    if ($('#shipping-address_1').length > 0) {
-        const address = $('#shipping-address_1').val();
-        if (address) {
-            const city = extractCityFromAddress(address);
-            if (city) {
+    function initOnPageLoad() {
+        const cityField = $('#shipping-city, #shipping_city, input[name="shipping_city"]').first();
+        if (cityField.length > 0) {
+            const city = cleanCityName(cityField.val());
+            if (city && city.length > 2) {
                 loadPickupPoints(city);
                 showCdekMapContainer();
             }
         }
     }
+    
+    // Запускаем инициализацию
+    $(document).ready(initOnPageLoad);
+    
+    // Также при обновлении checkout
+    $(document.body).on('updated_checkout', initOnPageLoad);
 });

@@ -180,10 +180,19 @@
 }
 
 /* Hide unnecessary fields styles */
-.wc-block-components-address-form__city,
 .wc-block-components-address-form__state,
 .wc-block-components-address-form__postcode {
     display: none !important;
+}
+
+/* Style city field */
+.cdek-city-field input {
+    border: 2px solid #ddd !important;
+}
+
+.cdek-city-field input:focus {
+    border-color: #007cba !important;
+    box-shadow: 0 0 0 1px rgba(0, 124, 186, 0.25) !important;
 }
 
 /* Custom address field styling */
