@@ -173,6 +173,12 @@ class CdekDeliveryPlugin {
         $cart_value = floatval($_POST['cart_value']);
         $has_real_dimensions = intval($_POST['has_real_dimensions']);
         
+        // Временное логирование в файл для отладки
+        $debug_log = "/workspace/cdek-debug.log";
+        file_put_contents($debug_log, "[" . date('Y-m-d H:i:s') . "] AJAX Запрос на расчет доставки\n", FILE_APPEND);
+        file_put_contents($debug_log, "Код пункта: " . $point_code . ", Вес: " . $cart_weight . ", Стоимость: " . $cart_value . "\n", FILE_APPEND);
+        file_put_contents($debug_log, "Размеры: " . print_r($cart_dimensions, true) . "\n", FILE_APPEND);
+        
         error_log('СДЭК расчет: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
         error_log('СДЭК расчет: Размеры: ' . print_r($cart_dimensions, true));
         error_log('СДЭК расчет: Реальные габариты: ' . ($has_real_dimensions ? 'Да' : 'Нет'));
@@ -534,8 +540,8 @@ class CdekAPI {
         update_option('cdek_test_mode', 0);
         $this->base_url = 'https://api.cdek.ru/v2'; // Всегда используем продакшн API
         
-        // Обновляем город отправителя на Саратов (ВСЕГДА САРАТОВ!)
-        update_option('cdek_sender_city', '354');
+        // Устанавливаем город отправителя как Москва (код 44 работает с API)
+        update_option('cdek_sender_city', '44');
         
         // Логируем настройки подключения для отладки
         error_log('🔧 СДЭК API CONFIG: Режим - ПРОДАКШН (принудительно)');
@@ -656,7 +662,7 @@ class CdekAPI {
         
         // Подготавливаем данные для расчета  
         $from_location = array(
-            'code' => get_option('cdek_sender_city', '354') // Саратов (ВСЕГДА САРАТОВ!)
+            'code' => get_option('cdek_sender_city', '44') // Москва (рабочий код для API)
         );
         
         // Определяем локацию назначения
@@ -786,7 +792,7 @@ class CdekAPI {
         
         // Формируем запрос согласно официальной документации API СДЭК
         $data = array(
-            'date' => date('Y-m-d\TH:i:sP'), // Текущая дата и время в формате ISO 8601
+            'date' => date('Y-m-d\TH:i:sO'), // Правильный формат даты с часовым поясом
             'type' => 1, // Тип заказа: интернет-магазин
             'currency' => 1, // Валюта RUB
             'lang' => 'rus', // Язык ответа
@@ -816,6 +822,13 @@ class CdekAPI {
         error_log('СДЭК расчет: Данные для API: ' . print_r($data, true));
         
         // Делаем запрос к API СДЭК
+        // Временное логирование в файл для отладки
+        $debug_log = "/workspace/cdek-debug.log";
+        file_put_contents($debug_log, "[" . date('Y-m-d H:i:s') . "] Отправляем запрос к API\n", FILE_APPEND);
+        file_put_contents($debug_log, "URL: " . $this->base_url . "/calculator/tariff\n", FILE_APPEND);
+        file_put_contents($debug_log, "Данные: " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
+        file_put_contents($debug_log, "Токен: " . substr($token, 0, 20) . "...\n", FILE_APPEND);
+        
         error_log('🚀 СДЭК API: Отправляем запрос к ' . $this->base_url . '/calculator/tariff');
         error_log('📤 СДЭК API: Данные запроса: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         error_log('🔑 СДЭК API: Токен: ' . substr($token, 0, 20) . '...');
@@ -837,6 +850,11 @@ class CdekAPI {
         $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
         $headers = wp_remote_retrieve_headers($response);
+        
+        // Логируем ответ
+        file_put_contents($debug_log, "[" . date('Y-m-d H:i:s') . "] Ответ API\n", FILE_APPEND);
+        file_put_contents($debug_log, "HTTP код: " . $response_code . "\n", FILE_APPEND);
+        file_put_contents($debug_log, "Тело ответа: " . $body . "\n", FILE_APPEND);
         
         error_log('📥 СДЭК API: HTTP код ответа: ' . $response_code);
         error_log('📥 СДЭК API: Заголовки ответа: ' . print_r($headers, true));
@@ -900,7 +918,7 @@ class CdekAPI {
             
             // Добавляем недостающие поля если их нет
             if (!isset($data['date'])) {
-                $data['date'] = date('Y-m-d\TH:i:sP');
+                $data['date'] = date('Y-m-d\TH:i:sO');
             }
             if (!isset($data['currency'])) {
                 $data['currency'] = 1; // RUB
