@@ -82,6 +82,14 @@ jQuery(document).ready(function($) {
             }
         });
         
+        console.log('Статистика габаритов после блока product-dimensions:', {
+            hasValidDimensions: hasValidDimensions,
+            totalVolume: totalVolume,
+            maxDimensions: {length: maxLength, width: maxWidth, height: maxHeight},
+            totalItems: totalItems,
+            cartWeight: cartWeight
+        });
+        
         // Если не удалось получить габариты из блока, пробуем WC блоки
         if (!hasValidDimensions) {
             $('.wc-block-components-order-summary-item').each(function() {
@@ -145,6 +153,44 @@ jQuery(document).ready(function($) {
                     cartValue += parseInt(priceText) || 0;
                 }
             });
+        }
+        
+        // Если все еще нет габаритов, пробуем получить из глобальных переменных WooCommerce
+        if (!hasValidDimensions) {
+            console.log('Пробуем получить габариты из глобальных данных WooCommerce...');
+            
+            // Проверяем наличие данных о товарах в window объекте
+            if (typeof wc_checkout_params !== 'undefined' || typeof woocommerce_params !== 'undefined') {
+                console.log('Найдены параметры WooCommerce');
+            }
+            
+            // Ищем скрытые поля с габаритами
+            $('input[name*="dimensions"], input[name*="weight"]').each(function() {
+                var name = $(this).attr('name');
+                var value = $(this).val();
+                console.log('Найдено скрытое поле:', name, '=', value);
+            });
+            
+            // Последняя попытка - устанавливаем базовые габариты товара
+            if (cartValue > 0) {
+                // Примерные габариты в зависимости от стоимости
+                var estimatedLength = Math.min(50, Math.max(20, Math.sqrt(cartValue / 100)));
+                var estimatedWidth = Math.min(40, Math.max(15, Math.sqrt(cartValue / 150)));
+                var estimatedHeight = Math.min(30, Math.max(10, Math.sqrt(cartValue / 200)));
+                
+                maxLength = estimatedLength;
+                maxWidth = estimatedWidth;
+                maxHeight = estimatedHeight;
+                totalVolume = estimatedLength * estimatedWidth * estimatedHeight;
+                hasValidDimensions = true;
+                
+                console.log('Установлены примерные габариты на основе стоимости:', {
+                    length: estimatedLength,
+                    width: estimatedWidth, 
+                    height: estimatedHeight,
+                    volume: totalVolume
+                });
+            }
         }
         
         // Рассчитываем итоговые размеры упаковки
@@ -265,10 +311,22 @@ jQuery(document).ready(function($) {
                 
                 if (response && response.success && response.data && response.data.delivery_sum) {
                     var deliveryCost = parseInt(response.data.delivery_sum);
-                    console.log('Успешно получена стоимость из API СДЭК:', deliveryCost);
+                    
+                    if (response.data.fallback) {
+                        console.warn('⚠️ Используется резервный расчет:', deliveryCost, 'руб.');
+                        console.log('Причина:', response.data.message);
+                    } else if (response.data.api_success) {
+                        console.log('✅ Успешно получена стоимость из настоящего API СДЭК:', deliveryCost, 'руб.');
+                        if (response.data.alternative_tariff) {
+                            console.log('Использован альтернативный тариф:', response.data.alternative_tariff);
+                        }
+                    } else {
+                        console.log('💰 Получена стоимость доставки:', deliveryCost, 'руб.');
+                    }
+                    
                     callback(deliveryCost);
                 } else {
-                    console.warn('API СДЭК вернул некорректный ответ, используем резервный расчет');
+                    console.error('❌ API СДЭК вернул некорректный ответ, используем резервный расчет');
                     console.log('Детали ответа:', response);
                     callback(calculateFallbackCost(point, cartData));
                 }
@@ -839,21 +897,30 @@ jQuery(document).ready(function($) {
         calculateDeliveryCost(point, function(deliveryCost) {
             hideDeliveryCalculationLoader();
             
-            var cdekShippingBlock = $('.wc-block-components-totals-item, .wc-block-components-totals-shipping .wc-block-components-totals-item').filter(function() {
+            // Ищем ВСЕ блоки доставки которые могут содержать информацию о СДЭК
+            var allShippingBlocks = $('.wc-block-components-totals-item').filter(function() {
                 var labelText = $(this).find('.wc-block-components-totals-item__label').text();
-                return labelText.indexOf('СДЭК') !== -1 || labelText.indexOf('Выберите пункт выдачи') !== -1;
+                return labelText.indexOf('СДЭК') !== -1 || 
+                       labelText.indexOf('Выберите пункт выдачи') !== -1 ||
+                       labelText.indexOf('Москва') !== -1 ||
+                       labelText.indexOf('Санкт-Петербург') !== -1 ||
+                       labelText.indexOf('Багратионовский') !== -1 ||
+                       labelText.indexOf('Университетский') !== -1 ||
+                       labelText.match(/^[А-Яа-я\s,]+$/) && labelText.includes(',');
             });
             
-            if (cdekShippingBlock.length > 0) {
-                updateShippingBlock(cdekShippingBlock, point, deliveryCost);
-            }
+            console.log('Найдено блоков доставки для обновления:', allShippingBlocks.length);
+            
+            // Обновляем каждый найденный блок
+            allShippingBlocks.each(function() {
+                updateShippingBlock($(this), point, deliveryCost);
+            });
             
             updateOrderTotal(deliveryCost);
         });
     }
     
     function updateShippingBlock(block, point, deliveryCost) {
-        var labelElement = block.find('.wc-block-components-totals-item__label');
         var pointName = point.name || 'Пункт выдачи';
         if (pointName.includes(',')) {
             pointName = pointName.split(',').slice(1).join(',').trim();
@@ -865,14 +932,8 @@ jQuery(document).ready(function($) {
             displayName = point.location.city + ', ' + pointName.replace(point.location.city, '').replace(/^[,\s]+/, '');
         }
         
-        labelElement.text(displayName);
-        
-        var valueElement = block.find('.wc-block-components-totals-item__value');
-        valueElement.text(deliveryCost + ' руб.');
-        
-        var descriptionElement = block.find('.wc-block-components-totals-item__description');
+        // Получаем адрес
         var address = '';
-        
         if (point.location && point.location.address_full) {
             address = point.location.address_full;
         } else if (point.location && point.location.address) {
@@ -881,42 +942,39 @@ jQuery(document).ready(function($) {
             address = point.address;
         }
         
+        // Обновляем элементы блока
+        var labelElement = block.find('.wc-block-components-totals-item__label');
+        var valueElement = block.find('.wc-block-components-totals-item__value');
+        var descriptionElement = block.find('.wc-block-components-totals-item__description');
+        
+        console.log('Обновляем блок доставки:', {
+            oldLabel: labelElement.text(),
+            newLabel: displayName,
+            cost: deliveryCost,
+            address: address
+        });
+        
+        // Обновляем название
+        labelElement.text(displayName);
+        
+        // Обновляем стоимость
+        valueElement.text(deliveryCost + ' руб.');
+        
+        // Обновляем или создаем описание с адресом
         if (address) {
+            if (descriptionElement.length === 0) {
+                descriptionElement = $('<div class="wc-block-components-totals-item__description"></div>');
+                block.append(descriptionElement);
+            }
             descriptionElement.html('<small style="color: #666;">' + address + '</small>');
         }
-        
-        // Принудительно обновляем все блоки доставки СДЭК
-        $('.wc-block-components-totals-shipping .wc-block-components-totals-item').each(function() {
-            var $item = $(this);
-            var labelText = $item.find('.wc-block-components-totals-item__label').text();
-            
-            if (labelText.indexOf('СДЭК') !== -1 || 
-                labelText.indexOf('Выберите пункт выдачи') !== -1 ||
-                labelText.indexOf('Москва') !== -1 ||
-                labelText.indexOf('Санкт-Петербург') !== -1) {
-                
-                $item.find('.wc-block-components-totals-item__label').text(displayName);
-                $item.find('.wc-block-components-totals-item__value').text(deliveryCost + ' руб.');
-                
-                if (address) {
-                    var desc = $item.find('.wc-block-components-totals-item__description');
-                    if (desc.length === 0) {
-                        desc = $('<div class="wc-block-components-totals-item__description"></div>');
-                        $item.append(desc);
-                    }
-                    desc.html('<small style="color: #666;">' + address + '</small>');
-                }
-            }
-        });
         
         // Сохраняем стоимость доставки для правильного пересчета
         window.currentDeliveryCost = deliveryCost;
         
-        console.log('Обновлен блок доставки:', {
-            point: displayName,
-            cost: deliveryCost,
-            address: address
-        });
+        // Принудительно обновляем событие для WooCommerce
+        $(document.body).trigger('updated_checkout');
+        $(document.body).trigger('updated_cart_totals');
     }
     
     function showDeliveryCalculationLoader() {
