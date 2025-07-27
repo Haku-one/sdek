@@ -697,25 +697,47 @@ jQuery(document).ready(function($) {
             var pointCity = '';
             var pointAddress = '';
             
-            // Извлекаем город из названия пункта
-            if (point.name && point.name.includes(',')) {
+            // Извлекаем город из различных источников с приоритетом
+            
+            // 1. Приоритет: location.city
+            if (point.location && point.location.city) {
+                pointCity = point.location.city.trim();
+            }
+            
+            // 2. Из названия пункта (между запятыми)
+            if (!pointCity && point.name && point.name.includes(',')) {
                 var nameParts = point.name.split(',');
                 if (nameParts.length >= 2) {
                     pointCity = nameParts[1].trim();
                 }
             }
             
-            // Или из адреса
-            if (!pointCity && point.location && point.location.city) {
-                pointCity = point.location.city;
-            }
-            
-            // Или из полного адреса
+            // 3. Из полного адреса (обычно город идет после индекса и страны)
             if (!pointCity && point.location && point.location.address_full) {
                 var addressParts = point.location.address_full.split(',');
-                if (addressParts.length >= 3) {
-                    pointCity = addressParts[2].trim();
+                // Пробуем разные позиции в адресе
+                for (var i = 0; i < addressParts.length; i++) {
+                    var part = addressParts[i].trim();
+                    // Ищем часть, которая похожа на название города (не индекс, не улица)
+                    if (part && 
+                        !part.match(/^\d{6}$/) && // не индекс
+                        !part.match(/^россия$/i) && // не страна
+                        !part.match(/^(ул|улица|пр|проспект|пер|переулок)/i) && // не улица
+                        part.length > 2) {
+                        pointCity = part;
+                        break;
+                    }
                 }
+            }
+            
+            // 4. Дополнительная очистка названия города
+            if (pointCity) {
+                // Убираем лишние символы и приводим к стандартному виду
+                pointCity = pointCity
+                    .replace(/^(г\.?\s*|город\s+)/i, '') // убираем "г." или "город"
+                    .replace(/\s*область$/i, '') // убираем "область" 
+                    .replace(/\s*край$/i, '') // убираем "край"
+                    .trim();
             }
             
             // Получаем полный адрес для поиска улицы
@@ -727,11 +749,60 @@ jQuery(document).ready(function($) {
             
             // Если указан город, проверяем соответствие
             if (window.currentSearchCity) {
-                var searchCityLower = window.currentSearchCity.toLowerCase();
-                var pointCityLower = pointCity.toLowerCase();
+                var searchCityLower = window.currentSearchCity.toLowerCase().trim();
+                var pointCityLower = pointCity.toLowerCase().trim();
                 
-                // Проверяем точное совпадение или вхождение
-                if (pointCityLower !== searchCityLower && pointCityLower.indexOf(searchCityLower) === -1) {
+                // Проверяем точное совпадение
+                var exactMatch = pointCityLower === searchCityLower;
+                
+                // Проверяем, что искомый город является полным словом в названии пункта
+                var wordBoundaryMatch = false;
+                if (!exactMatch) {
+                    // Создаем регулярное выражение для поиска полного слова
+                    var searchPattern = new RegExp('\\b' + searchCityLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+                    wordBoundaryMatch = searchPattern.test(pointCityLower);
+                }
+                
+                // Дополнительная проверка для исключения похожих названий
+                var isSimilarButDifferent = false;
+                if (wordBoundaryMatch || pointCityLower.indexOf(searchCityLower) !== -1) {
+                    // Список исключений для точного поиска
+                    var exclusions = [
+                        // Саратов vs Новосаратовка
+                        { search: 'саратов', exclude: ['новосаратовка', 'саратовка'] },
+                        // Уфа vs Верхний Уфалей
+                        { search: 'уфа', exclude: ['уфалей', 'верхний уфалей'] },
+                        // Москва vs Подмосковье
+                        { search: 'москва', exclude: ['подмосковье', 'московская область'] },
+                        // Санкт-Петербург vs Петербургский
+                        { search: 'санкт-петербург', exclude: ['петербургский'] },
+                        { search: 'петербург', exclude: ['петербургский'] },
+                        // Казань vs Казанское
+                        { search: 'казань', exclude: ['казанское', 'казанский'] },
+                        // Пермь vs Пермское
+                        { search: 'пермь', exclude: ['пермское', 'пермский'] },
+                        // Тула vs Тульский
+                        { search: 'тула', exclude: ['тульский', 'тульское'] }
+                    ];
+                    
+                    exclusions.forEach(function(rule) {
+                        if (searchCityLower === rule.search) {
+                            rule.exclude.forEach(function(excludePattern) {
+                                if (pointCityLower.indexOf(excludePattern) !== -1) {
+                                    isSimilarButDifferent = true;
+                                }
+                            });
+                        }
+                    });
+                }
+                
+                // Исключаем если это похожий, но другой город
+                if (isSimilarButDifferent) {
+                    return false;
+                }
+                
+                // Принимаем только при точном совпадении или совпадении по границам слов
+                if (!exactMatch && !wordBoundaryMatch) {
                     return false;
                 }
             }
@@ -877,16 +948,36 @@ jQuery(document).ready(function($) {
         
         // Подгоняем масштаб карты под все точки
         if (bounds.length > 0) {
-            // Рассчитываем центр области
-            var minLat = Math.min.apply(null, bounds.map(function(coord) { return coord[0]; }));
-            var maxLat = Math.max.apply(null, bounds.map(function(coord) { return coord[0]; }));
-            var minLon = Math.min.apply(null, bounds.map(function(coord) { return coord[1]; }));
-            var maxLon = Math.max.apply(null, bounds.map(function(coord) { return coord[1]; }));
-            
-            var centerLat = (minLat + maxLat) / 2;
-            var centerLon = (minLon + maxLon) / 2;
-            
-            cdekMap.setCenter([centerLat, centerLon], 12);
+            if (bounds.length === 1) {
+                // Если только одна точка, центрируем на ней
+                cdekMap.setCenter(bounds[0], 14);
+            } else {
+                // Если несколько точек, рассчитываем оптимальный обзор
+                var minLat = Math.min.apply(null, bounds.map(function(coord) { return coord[0]; }));
+                var maxLat = Math.max.apply(null, bounds.map(function(coord) { return coord[0]; }));
+                var minLon = Math.min.apply(null, bounds.map(function(coord) { return coord[1]; }));
+                var maxLon = Math.max.apply(null, bounds.map(function(coord) { return coord[1]; }));
+                
+                var centerLat = (minLat + maxLat) / 2;
+                var centerLon = (minLon + maxLon) / 2;
+                
+                // Рассчитываем расстояние между крайними точками для определения зума
+                var latDiff = maxLat - minLat;
+                var lonDiff = maxLon - minLon;
+                var maxDiff = Math.max(latDiff, lonDiff);
+                
+                var zoom = 12;
+                if (maxDiff < 0.01) zoom = 15;      // Очень близко
+                else if (maxDiff < 0.05) zoom = 13; // Близко
+                else if (maxDiff < 0.1) zoom = 12;  // Средне
+                else if (maxDiff < 0.5) zoom = 10;  // Далеко
+                else zoom = 8;                       // Очень далеко
+                
+                cdekMap.setCenter([centerLat, centerLon], zoom);
+            }
+        } else if (window.currentSearchCoordinates) {
+            // Если нет пунктов, но есть координаты поиска, центрируем на них
+            cdekMap.setCenter(window.currentSearchCoordinates, 12);
         }
     }
     
