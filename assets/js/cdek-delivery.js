@@ -206,36 +206,53 @@ jQuery(document).ready(function($) {
                 
                 var price = 0;
                 
-                // Удаляем все символы кроме цифр и точек
-                var cleanPriceText = priceText.replace(/[^\d.]/g, '');
-                console.log('Очищенный текст цены:', cleanPriceText);
+                // Специальная обработка дублированных цен
+                // Проверяем, повторяется ли одна и та же цена в тексте
+                var pricePattern = /(\d+(?:\.\d+)?)\s*руб\.?/g;
+                var priceMatches = [];
+                var match;
                 
-                if (cleanPriceText.length > 0) {
-                    // Проверяем на дублирование (например, "180180" -> "180")
-                    var numbers = cleanPriceText.split('.');
-                    var mainNumber = numbers[0]; // Берем только целую часть
+                while ((match = pricePattern.exec(priceText)) !== null) {
+                    priceMatches.push(parseFloat(match[1]));
+                }
+                
+                console.log('Найденные цены в тексте:', priceMatches);
+                
+                if (priceMatches.length > 0) {
+                    // Берем первую найденную цену (исключаем дубли)
+                    price = parseInt(priceMatches[0]) || 0;
+                    console.log('✅ Используем первую цену:', price);
+                } else {
+                    // Fallback: удаляем все символы кроме цифр и ищем числа
+                    var cleanPriceText = priceText.replace(/[^\d.]/g, '');
+                    console.log('Очищенный текст цены:', cleanPriceText);
                     
-                    // Если число слишком длинное, проверяем на дублирование
-                    if (mainNumber.length >= 6) {
-                        var halfLength = Math.floor(mainNumber.length / 2);
-                        var firstHalf = mainNumber.substring(0, halfLength);
-                        var secondHalf = mainNumber.substring(halfLength);
+                    if (cleanPriceText.length > 0) {
+                        // Разбиваем по точкам и берем первое число
+                        var numbers = cleanPriceText.split('.');
+                        var mainNumber = numbers[0];
                         
-                        // Если обе половины одинаковы, это дублирование
-                        if (firstHalf === secondHalf && firstHalf.length >= 2) {
-                            price = parseInt(firstHalf) || 0;
-                            console.log('🔍 Обнаружено дублирование цены:', mainNumber, '-> исправлено на:', price);
+                        // Проверяем на дублирование типа "180180"
+                        if (mainNumber.length >= 6 && mainNumber.length % 2 === 0) {
+                            var halfLength = mainNumber.length / 2;
+                            var firstHalf = mainNumber.substring(0, halfLength);
+                            var secondHalf = mainNumber.substring(halfLength);
+                            
+                            if (firstHalf === secondHalf) {
+                                price = parseInt(firstHalf) || 0;
+                                console.log('🔍 Обнаружено дублирование:', mainNumber, '-> исправлено на:', price);
+                            } else {
+                                price = parseInt(mainNumber) || 0;
+                            }
                         } else {
                             price = parseInt(mainNumber) || 0;
                         }
                     } else {
-                        price = parseInt(mainNumber) || 0;
-                    }
-                } else {
-                    // Fallback: ищем первое число в исходном тексте
-                    var priceMatch = priceText.match(/(\d+)/);
-                    if (priceMatch) {
-                        price = parseInt(priceMatch[1]) || 0;
+                        // Последний fallback: ищем любое число
+                        var numberMatch = priceText.match(/(\d+)/);
+                        if (numberMatch) {
+                            price = parseInt(numberMatch[1]) || 0;
+                        }
                     }
                 }
                 

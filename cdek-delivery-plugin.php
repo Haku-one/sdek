@@ -784,8 +784,12 @@ class CdekAPI {
         // 138 - Посылка дверь-постамат
         $tariff_code = 136; // Возвращаем обратно для пунктов выдачи
         
+        // Формируем запрос согласно официальной документации API СДЭК
         $data = array(
+            'date' => date('Y-m-d\TH:i:sP'), // Текущая дата и время в формате ISO 8601
             'type' => 1, // Тип заказа: интернет-магазин
+            'currency' => 1, // Валюта RUB
+            'lang' => 'rus', // Язык ответа
             'tariff_code' => $tariff_code,
             'from_location' => $from_location,
             'to_location' => $to_location,
@@ -813,7 +817,8 @@ class CdekAPI {
         
         // Делаем запрос к API СДЭК
         error_log('🚀 СДЭК API: Отправляем запрос к ' . $this->base_url . '/calculator/tariff');
-        error_log('📤 СДЭК API: Данные запроса: ' . json_encode($data, JSON_UNESCAPED_UNICODE));
+        error_log('📤 СДЭК API: Данные запроса: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        error_log('🔑 СДЭК API: Токен: ' . substr($token, 0, 20) . '...');
         
         $response = wp_remote_post($this->base_url . '/calculator/tariff', array(
             'headers' => array(
@@ -850,12 +855,26 @@ class CdekAPI {
                     'period_max' => isset($parsed_body['period_max']) ? $parsed_body['period_max'] : null,
                     'api_success' => true
                 );
-            } elseif (isset($parsed_body['errors'])) {
+            } elseif (isset($parsed_body['errors']) && !empty($parsed_body['errors'])) {
                 error_log('❌ СДЭК API: API вернул ошибки: ' . print_r($parsed_body['errors'], true));
+                
+                // Анализируем ошибки для понимания проблемы
+                foreach ($parsed_body['errors'] as $error) {
+                    if (isset($error['code']) && isset($error['message'])) {
+                        error_log('❌ СДЭК API: Ошибка ' . $error['code'] . ': ' . $error['message']);
+                    }
+                }
+                
                 // Пробуем альтернативный способ расчета
                 return $this->try_alternative_calculation($data, $token);
             } else {
                 error_log('⚠️ СДЭК API: API вернул ответ без delivery_sum: ' . print_r($parsed_body, true));
+                
+                // Проверяем, есть ли warnings
+                if (isset($parsed_body['warnings']) && !empty($parsed_body['warnings'])) {
+                    error_log('⚠️ СДЭК API: Предупреждения: ' . print_r($parsed_body['warnings'], true));
+                }
+                
                 return $this->try_alternative_calculation($data, $token);
             }
         } else {
@@ -878,6 +897,17 @@ class CdekAPI {
         foreach ($alternative_tariffs as $tariff) {
             $data = $original_data;
             $data['tariff_code'] = $tariff;
+            
+            // Добавляем недостающие поля если их нет
+            if (!isset($data['date'])) {
+                $data['date'] = date('Y-m-d\TH:i:sP');
+            }
+            if (!isset($data['currency'])) {
+                $data['currency'] = 1; // RUB
+            }
+            if (!isset($data['lang'])) {
+                $data['lang'] = 'rus';
+            }
             
             // Упростим локацию - используем только город Москва если не указано
             if (!isset($data['to_location']['code'])) {
