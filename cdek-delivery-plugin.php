@@ -72,6 +72,9 @@ class CdekDeliveryPlugin {
         
         // Поддержка новых блоков WooCommerce
         add_action('plugins_loaded', array($this, 'load_blocks_integration'));
+        
+        // Добавляем габариты в описание товара в корзине
+        add_filter('woocommerce_get_item_data', array($this, 'add_dimensions_to_cart_item'), 10, 2);
     }
     
     public function init() {
@@ -201,16 +204,18 @@ class CdekDeliveryPlugin {
         } else {
             error_log('СДЭК расчет: ❌ API не вернул корректную стоимость.');
             error_log('СДЭК расчет: Детали ответа API: ' . print_r($cost_data, true));
-            error_log('СДЭК расчет: ⚠️ Используем резервный расчет');
+            error_log('СДЭК расчет: ❌ ОТКАЗЫВАЕМСЯ ОТ РАСЧЕТА - НЕТ FALLBACK');
             
-            // Резервный расчет только если API недоступен
-            $fallback_cost = $this->calculate_fallback_cost($cart_weight, $cart_value, $cart_dimensions, $has_real_dimensions);
-            
-            wp_send_json_success(array(
-                'delivery_sum' => $fallback_cost,
-                'fallback' => true,
-                'api_success' => false,
-                'message' => 'API СДЭК недоступен, используется резервный расчет'
+            // НЕТ РЕЗЕРВНОГО РАСЧЕТА! Возвращаем ошибку
+            wp_send_json_error(array(
+                'message' => 'API СДЭК недоступен, расчет стоимости невозможен',
+                'api_response' => $cost_data,
+                'debug_info' => array(
+                    'point_code' => $point_code,
+                    'cart_weight' => $cart_weight,
+                    'cart_value' => $cart_value,
+                    'cart_dimensions' => $cart_dimensions
+                )
             ));
         }
     }
@@ -377,6 +382,25 @@ class CdekDeliveryPlugin {
         echo '</div>';
         
         echo '</div>';
+    }
+    
+    public function add_dimensions_to_cart_item($item_data, $cart_item) {
+        $product = $cart_item['data'];
+        
+        // Получаем габариты товара
+        $length = $product->get_length();
+        $width = $product->get_width(); 
+        $height = $product->get_height();
+        
+        // Если есть габариты, добавляем их в метаданные
+        if ($length && $width && $height) {
+            $item_data[] = array(
+                'name' => 'Габариты (Д×Ш×В)',
+                'value' => $length . '×' . $width . '×' . $height . ' см'
+            );
+        }
+        
+        return $item_data;
     }
     
     public function hide_checkout_fields_css() {
@@ -742,7 +766,8 @@ class CdekAPI {
         error_log('СДЭК расчет: Данные для API: ' . print_r($data, true));
         
         // Делаем запрос к API СДЭК
-        error_log('СДЭК API: Отправляем запрос к ' . $this->base_url . '/calculator/tariff');
+        error_log('🚀 СДЭК API: Отправляем запрос к ' . $this->base_url . '/calculator/tariff');
+        error_log('📤 СДЭК API: Данные запроса: ' . json_encode($data, JSON_UNESCAPED_UNICODE));
         
         $response = wp_remote_post($this->base_url . '/calculator/tariff', array(
             'headers' => array(
@@ -760,17 +785,19 @@ class CdekAPI {
         
         $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+        $headers = wp_remote_retrieve_headers($response);
         
-        error_log('СДЭК расчет: HTTP код ответа: ' . $response_code);
-        error_log('СДЭК расчет: Тело ответа: ' . $body);
+        error_log('📥 СДЭК API: HTTP код ответа: ' . $response_code);
+        error_log('📥 СДЭК API: Заголовки ответа: ' . print_r($headers, true));
+        error_log('📥 СДЭК API: Тело ответа: ' . $body);
         
         $parsed_body = json_decode($body, true);
         
         if ($response_code === 200 && $parsed_body) {
-            error_log('СДЭК расчет: Разобранный ответ API: ' . print_r($parsed_body, true));
+            error_log('✅ СДЭК API: Успешный HTTP ответ, разбираем JSON: ' . print_r($parsed_body, true));
             
             if (isset($parsed_body['delivery_sum']) && $parsed_body['delivery_sum'] > 0) {
-                error_log('СДЭК расчет: Успешно получена стоимость от API: ' . $parsed_body['delivery_sum']);
+                error_log('🎉 СДЭК API: Успешно получена стоимость от API: ' . $parsed_body['delivery_sum'] . ' руб.');
                 return array(
                     'delivery_sum' => intval($parsed_body['delivery_sum']),
                     'period_min' => isset($parsed_body['period_min']) ? $parsed_body['period_min'] : null,
@@ -778,15 +805,18 @@ class CdekAPI {
                     'api_success' => true
                 );
             } elseif (isset($parsed_body['errors'])) {
-                error_log('СДЭК расчет: API вернул ошибки: ' . print_r($parsed_body['errors'], true));
+                error_log('❌ СДЭК API: API вернул ошибки: ' . print_r($parsed_body['errors'], true));
                 // Пробуем альтернативный способ расчета
                 return $this->try_alternative_calculation($data, $token);
             } else {
-                error_log('СДЭК расчет: API вернул ответ без delivery_sum');
+                error_log('⚠️ СДЭК API: API вернул ответ без delivery_sum: ' . print_r($parsed_body, true));
                 return $this->try_alternative_calculation($data, $token);
             }
         } else {
-            error_log('СДЭК расчет: Некорректный ответ от API. Код: ' . $response_code);
+            error_log('❌ СДЭК API: Некорректный ответ. HTTP код: ' . $response_code . ', JSON валиден: ' . ($parsed_body ? 'Да' : 'Нет'));
+            if (!$parsed_body && $body) {
+                error_log('❌ СДЭК API: Ошибка парсинга JSON. Сырое тело: ' . substr($body, 0, 500));
+            }
             return false;
         }
         

@@ -130,70 +130,83 @@ jQuery(document).ready(function($) {
             cartWeight: cartWeight
         });
         
-        // Если не удалось получить габариты из блока, пробуем WC блоки
-        if (!hasValidDimensions) {
-            $('.wc-block-components-order-summary-item').each(function() {
-                var $item = $(this);
-                
-                // Получаем количество товара
-                var quantityElement = $item.find('.wc-block-components-order-summary-item__quantity span[aria-hidden="true"]');
-                var quantity = parseInt(quantityElement.text()) || 1;
-                
-                // Ищем размеры в метаданных товара
-                var dimensionsElement = $item.find('.wc-block-components-product-details__value').filter(function() {
-                    var siblingLabel = $(this).siblings('.wc-block-components-product-details__name');
-                    return siblingLabel.text().indexOf('Размеры') !== -1 || siblingLabel.text().indexOf('Габариты') !== -1;
-                });
-                
-                if (dimensionsElement.length > 0) {
-                    var dimensionsText = dimensionsElement.text().trim();
-                    var dimensionsMatch = dimensionsText.match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/);
-                    
-                    if (dimensionsMatch) {
-                        var length = parseFloat(dimensionsMatch[1]);
-                        var width = parseFloat(dimensionsMatch[2]);
-                        var height = parseFloat(dimensionsMatch[3]);
-                        
-                        var itemVolume = length * width * height * quantity;
-                        totalVolume += itemVolume;
-                        
-                        maxLength = Math.max(maxLength, length);
-                        maxWidth = Math.max(maxWidth, width);
-                        maxHeight = Math.max(maxHeight, height);
-                        
-                        hasValidDimensions = true;
-                    }
-                }
-                
-                // Получаем вес товара
-                var weightElement = $item.find('.wc-block-components-product-details__value').filter(function() {
-                    var siblingLabel = $(this).siblings('.wc-block-components-product-details__name');
-                    return siblingLabel.text().indexOf('Вес') !== -1;
-                });
-                
-                if (weightElement.length > 0) {
-                    var weightText = weightElement.text().trim();
-                    var weightMatch = weightText.match(/(\d+(?:\.\d+)?)/);
-                    
-                    if (weightMatch) {
-                        var weight = parseFloat(weightMatch[1]);
-                        
-                        if (weightText.includes('кг')) {
-                            weight = weight * 1000;
-                        }
-                        
-                        cartWeight += weight * quantity;
-                    }
-                }
-                
-                // Получаем стоимость товара
-                var priceElement = $item.find('.wc-block-components-product-price__value');
-                if (priceElement.length > 0) {
-                    var priceText = priceElement.text().replace(/[^\d]/g, '');
-                    cartValue += parseInt(priceText) || 0;
-                }
+        // ПРИОРИТЕТ 3: Если не нашли в скрытых полях, пробуем из WC блоков товаров
+        $('.wc-block-components-order-summary-item').each(function() {
+            var $item = $(this);
+            
+            // Получаем количество товара
+            var quantityElement = $item.find('.wc-block-components-order-summary-item__quantity span[aria-hidden="true"]');
+            var quantity = parseInt(quantityElement.text()) || 1;
+            
+            console.log('Обработка товара из WC блока, количество:', quantity);
+            
+            // Ищем габариты в метаданных товара - новый формат "Габариты (Д×Ш×В): 10×10×10 см"
+            var dimensionsElement = $item.find('.wc-block-components-product-details__value').filter(function() {
+                var siblingLabel = $(this).siblings('.wc-block-components-product-details__name');
+                var labelText = siblingLabel.text();
+                return labelText.indexOf('Габариты') !== -1 || labelText.indexOf('Размеры') !== -1;
             });
-        }
+            
+            if (dimensionsElement.length > 0) {
+                var dimensionsText = dimensionsElement.text().trim();
+                console.log('Найдены габариты в блоке товара:', dimensionsText);
+                
+                // Парсим габариты в формате "10×10×10 см" или "10x10x10"
+                var dimensionsMatch = dimensionsText.match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/);
+                
+                if (dimensionsMatch) {
+                    var length = parseFloat(dimensionsMatch[1]);
+                    var width = parseFloat(dimensionsMatch[2]);
+                    var height = parseFloat(dimensionsMatch[3]);
+                    
+                    console.log('✅ Найдены габариты из WC блока товара:', {length: length, width: width, height: height, quantity: quantity});
+                    
+                    var itemVolume = length * width * height * quantity;
+                    totalVolume += itemVolume;
+                    totalItems += quantity;
+                    
+                    maxLength = Math.max(maxLength, length);
+                    maxWidth = Math.max(maxWidth, width);
+                    maxHeight = Math.max(maxHeight, height);
+                    
+                    hasValidDimensions = true;
+                }
+            }
+            
+            // Получаем вес товара - обновленный поиск
+            var weightElement = $item.find('.wc-block-components-product-details__value').filter(function() {
+                var siblingLabel = $(this).siblings('.wc-block-components-product-details__name');
+                return siblingLabel.text().indexOf('Вес') !== -1;
+            });
+            
+            if (weightElement.length > 0) {
+                var weightText = weightElement.text().trim();
+                console.log('Найден вес в блоке товара:', weightText);
+                
+                var weightMatch = weightText.match(/(\d+(?:\.\d+)?)/);
+                
+                if (weightMatch) {
+                    var weight = parseFloat(weightMatch[1]);
+                    
+                    // Конвертируем в граммы если нужно
+                    if (weightText.includes('кг')) {
+                        weight = weight * 1000;
+                    }
+                    
+                    cartWeight += weight * quantity;
+                    console.log('✅ Найден вес из WC блока товара:', weight, 'г, количество:', quantity);
+                }
+            }
+            
+            // Получаем стоимость товара
+            var priceElement = $item.find('.wc-block-components-product-price__value');
+            if (priceElement.length > 0) {
+                var priceText = priceElement.text().replace(/[^\d]/g, '');
+                var price = parseInt(priceText) || 0;
+                cartValue += price * quantity;
+                console.log('Найдена цена товара:', price, 'руб., количество:', quantity);
+            }
+        });
         
         // Если все еще нет габаритов, пробуем получить из глобальных переменных WooCommerce
         if (!hasValidDimensions) {
@@ -365,20 +378,33 @@ jQuery(document).ready(function($) {
                     }
                     
                     callback(deliveryCost);
+                } else if (!response.success) {
+                    // API вернул ошибку - нет fallback
+                    console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    console.error('🔍 Данные для отладки:', response.data ? response.data.debug_info : response);
+                    
+                    // Показываем пользователю сообщение об ошибке
+                    alert('Ошибка расчета стоимости доставки СДЭК. Попробуйте выбрать другой пункт выдачи или обновите страницу.');
+                    return; // НЕ вызываем callback
                 } else {
-                    console.error('❌ API СДЭК вернул некорректный ответ, используем резервный расчет');
-                    console.log('Детали ответа:', response);
-                    callback(calculateFallbackCost(point, cartData));
+                    console.error('❌ API СДЭК вернул некорректный ответ');
+                    console.error('🔍 Детали ответа:', response);
+                    
+                    alert('Ошибка получения стоимости доставки. Попробуйте обновить страницу.');
+                    return; // НЕ вызываем callback
                 }
             },
             error: function(xhr, status, error) {
-                console.error('Ошибка запроса к API СДЭК:', {
+                console.error('❌ Критическая ошибка запроса к API СДЭК:', {
                     status: status,
                     error: error,
-                    responseText: xhr.responseText
+                    responseText: xhr.responseText,
+                    readyState: xhr.readyState
                 });
-                console.warn('Используем резервный расчет стоимости');
-                callback(calculateFallbackCost(point, cartData));
+                
+                // Показываем детальную ошибку
+                alert('Ошибка соединения с API СДЭК. Проверьте интернет-соединение и попробуйте снова.');
+                return; // НЕ вызываем callback
             }
         });
     }
