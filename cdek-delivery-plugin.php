@@ -531,8 +531,8 @@ class CdekAPI {
         $this->test_mode = get_option('cdek_test_mode', 0);
         $this->base_url = $this->test_mode ? 'https://api.edu.cdek.ru/v2' : 'https://api.cdek.ru/v2';
         
-        // Обновляем город отправителя на Москву (там есть склады СДЭК)
-        update_option('cdek_sender_city', '44');
+        // Обновляем город отправителя на Саратов (ВСЕГДА САРАТОВ!)
+        update_option('cdek_sender_city', '354');
     }
     
     public function get_auth_token() {
@@ -640,7 +640,7 @@ class CdekAPI {
         
         // Подготавливаем данные для расчета  
         $from_location = array(
-            'code' => get_option('cdek_sender_city', '44') // Москва (там точно есть склады)
+            'code' => get_option('cdek_sender_city', '354') // Саратов (ВСЕГДА САРАТОВ!)
         );
         
         // Определяем локацию назначения
@@ -763,11 +763,10 @@ class CdekAPI {
         
         error_log('СДЭК API: Подготовленная посылка: ' . print_r($packages[0], true));
         
-        // Определяем тариф для доставки до пункта выдачи
-        // 233 - Эконом склад-склад (для регионов)
-        // 234 - Стандарт склад-склад  
-        // 136 - Посылка склад-постамат/пункт выдачи
-        $tariff_code = 233; // Используем эконом тариф
+        // Определяем тариф для доставки ИЗ САРАТОВА до пункта выдачи
+        // 136 - Посылка склад-постамат/пункт выдачи (ПРАВИЛЬНЫЙ для ПВЗ)
+        // 138 - Посылка дверь-постамат
+        $tariff_code = 136; // Возвращаем обратно для пунктов выдачи
         
         $data = array(
             'type' => 1, // Тип заказа: интернет-магазин
@@ -857,8 +856,8 @@ class CdekAPI {
     private function try_alternative_calculation($original_data, $token) {
         error_log('СДЭК расчет: Пробуем альтернативный метод расчета');
         
-        // Попробуем разные тарифы для пунктов выдачи
-        $alternative_tariffs = [233, 234, 291]; // Эконом, Стандарт, СДЭК Express склад-склад
+        // Попробуем разные тарифы ИЗ САРАТОВА
+        $alternative_tariffs = [136, 138, 233, 234]; // ПВЗ, Постамат, Эконом, Стандарт
         
         foreach ($alternative_tariffs as $tariff) {
             $data = $original_data;
