@@ -147,15 +147,63 @@ function calculate_fallback_delivery_cost($weight, $value, $dimensions, $has_rea
 
 /**
  * Подключение скриптов с AJAX URL и nonce
+ * ВАЖНО: Измените пути к файлам в соответствии с вашей структурой папок
  */
 function cdek_enqueue_scripts() {
-    wp_enqueue_script('cdek-delivery', get_template_directory_uri() . '/js/cdek-delivery.js', array('jquery'), '1.0.0', true);
-    wp_enqueue_script('cdek-cart', get_template_directory_uri() . '/js/cdek-cart.js', array('jquery'), '1.0.0', true);
-    
-    wp_localize_script('cdek-delivery', 'cdek_ajax', array(
-        'ajax_url' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('cdek_ajax_nonce')
-    ));
+    // Проверяем, что мы на страницах корзины или оформления заказа
+    if (is_cart() || is_checkout() || is_wc_endpoint_url()) {
+        
+        // Определяем правильные пути к файлам
+        // Вариант 1: файлы в папке темы /js/
+        $js_path = get_template_directory_uri() . '/js/';
+        
+        // Вариант 2: файлы в корне темы (раскомментируйте если нужно)
+        // $js_path = get_template_directory_uri() . '/';
+        
+        // Вариант 3: файлы в дочерней теме (раскомментируйте если нужно)
+        // $js_path = get_stylesheet_directory_uri() . '/js/';
+        
+        // Проверяем, что файлы существуют перед подключением
+        $delivery_file = get_template_directory() . '/js/cdek-delivery.js';
+        $cart_file = get_template_directory() . '/js/cdek-cart.js';
+        
+        if (file_exists($delivery_file)) {
+            wp_enqueue_script('cdek-delivery', $js_path . 'cdek-delivery.js', array('jquery'), '1.0.0', true);
+            
+            // Передаем AJAX данные только если файл успешно подключен
+            wp_localize_script('cdek-delivery', 'cdek_ajax', array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('cdek_ajax_nonce')
+            ));
+        }
+        
+        if (file_exists($cart_file)) {
+            wp_enqueue_script('cdek-cart', $js_path . 'cdek-cart.js', array('jquery'), '1.0.0', true);
+        }
+    }
 }
 add_action('wp_enqueue_scripts', 'cdek_enqueue_scripts');
+
+/**
+ * Альтернативный способ подключения скриптов
+ * Используйте этот код если файлы находятся в другом месте
+ */
+function cdek_enqueue_scripts_alternative() {
+    if (is_cart() || is_checkout() || is_wc_endpoint_url()) {
+        
+        // Укажите прямые URL к вашим файлам
+        $delivery_js_url = 'URL_К_ВАШЕМУ_ФАЙЛУ/cdek-delivery.js';
+        $cart_js_url = 'URL_К_ВАШЕМУ_ФАЙЛУ/cdek-cart.js';
+        
+        wp_enqueue_script('cdek-delivery', $delivery_js_url, array('jquery'), '1.0.0', true);
+        wp_enqueue_script('cdek-cart', $cart_js_url, array('jquery'), '1.0.0', true);
+        
+        wp_localize_script('cdek-delivery', 'cdek_ajax', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('cdek_ajax_nonce')
+        ));
+    }
+}
+// Раскомментируйте следующую строку если используете альтернативный способ
+// add_action('wp_enqueue_scripts', 'cdek_enqueue_scripts_alternative');
 ?>
