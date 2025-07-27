@@ -382,8 +382,14 @@ jQuery(document).ready(function($) {
                     // API вернул ошибку - нет fallback
                     console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
                     console.error('🔍 Данные для отладки:', response.data ? response.data.debug_info : response);
+                    console.error('🔍 ПОЛНЫЙ ответ от сервера:', response);
                     
-                    // Показываем пользователю сообщение об ошибке
+                    // Показываем детальную информацию об ошибке
+                    if (response.data && response.data.api_response) {
+                        console.error('🔍 Ответ от API СДЭК:', response.data.api_response);
+                    }
+                    
+                    // Показываем пользователю сообщение об ошибке  
                     alert('Ошибка расчета стоимости доставки СДЭК. Попробуйте выбрать другой пункт выдачи или обновите страницу.');
                     return; // НЕ вызываем callback
                 } else {

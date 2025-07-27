@@ -540,6 +540,10 @@ class CdekAPI {
         $token = get_transient($cache_key);
         
         if (!$token) {
+            error_log('🔑 СДЭК AUTH: Получаем новый токен авторизации');
+            error_log('🔑 СДЭК AUTH: URL: ' . $this->base_url . '/oauth/token');
+            error_log('🔑 СДЭК AUTH: Client ID: ' . $this->account);
+            
             $response = wp_remote_post($this->base_url . '/oauth/token', array(
                 'headers' => array(
                     'Content-Type' => 'application/x-www-form-urlencoded'
@@ -548,16 +552,30 @@ class CdekAPI {
                     'grant_type' => 'client_credentials',
                     'client_id' => $this->account,
                     'client_secret' => $this->password
-                )
+                ),
+                'timeout' => 30
             ));
             
             if (!is_wp_error($response)) {
-                $body = json_decode(wp_remote_retrieve_body($response), true);
-                if (isset($body['access_token'])) {
-                    $token = $body['access_token'];
-                    set_transient($cache_key, $token, $body['expires_in'] - 60);
+                $response_code = wp_remote_retrieve_response_code($response);
+                $body = wp_remote_retrieve_body($response);
+                error_log('🔑 СДЭК AUTH: HTTP код: ' . $response_code);
+                error_log('🔑 СДЭК AUTH: Ответ: ' . $body);
+                
+                $parsed_body = json_decode($body, true);
+                if (isset($parsed_body['access_token'])) {
+                    $token = $parsed_body['access_token'];
+                    $expires_in = isset($parsed_body['expires_in']) ? intval($parsed_body['expires_in']) : 3600;
+                    set_transient($cache_key, $token, $expires_in - 60);
+                    error_log('🔑 СДЭК AUTH: ✅ Токен получен успешно, действует ' . $expires_in . ' сек');
+                } else {
+                    error_log('🔑 СДЭК AUTH: ❌ Не удалось получить токен. Ответ: ' . print_r($parsed_body, true));
                 }
+            } else {
+                error_log('🔑 СДЭК AUTH: ❌ Ошибка HTTP запроса: ' . $response->get_error_message());
             }
+        } else {
+            error_log('🔑 СДЭК AUTH: ✅ Используем кэшированный токен');
         }
         
         return $token;
@@ -610,11 +628,15 @@ class CdekAPI {
     }
     
     public function calculate_delivery_cost_to_point($point_code, $point_data, $cart_weight, $cart_dimensions, $cart_value, $has_real_dimensions) {
+        error_log('🎯 СДЭК РАСЧЕТ: Начинаем расчет для пункта ' . $point_code);
+        
         $token = $this->get_auth_token();
         if (!$token) {
-            error_log('СДЭК расчет: Не удалось получить токен авторизации');
+            error_log('❌ СДЭК расчет: Не удалось получить токен авторизации');
             return false;
         }
+        
+        error_log('✅ СДЭК РАСЧЕТ: Токен авторизации получен: ' . substr($token, 0, 20) . '...');
         
         // Подготавливаем данные для расчета
         $from_location = array(
@@ -708,10 +730,14 @@ class CdekAPI {
                 foreach ($city_codes as $prefix => $city_info) {
                     if (stripos($point_code, $prefix) === 0) {
                         $to_location['code'] = $city_info['code'];
-                        error_log('СДЭК API: Используем код города ' . $city_info['name'] . ' по коду пункта: ' . $city_info['code']);
+                        error_log('🏙️ СДЭК API: Найден город ' . $city_info['name'] . ' (код: ' . $city_info['code'] . ') по префиксу пункта: ' . $prefix);
                         $location_found = true;
                         break;
                     }
+                }
+                
+                if (!$location_found) {
+                    error_log('⚠️ СДЭК API: Код пункта "' . $point_code . '" не найден в списке городов. Доступные префиксы: ' . implode(', ', array_keys($city_codes)));
                 }
             }
             
