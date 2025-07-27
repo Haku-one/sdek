@@ -479,6 +479,12 @@ jQuery(document).ready(function($) {
     
     function searchCdekPoints(address) {
         var parsedAddress = parseAddress(address);
+        
+        // Если город изменился, сбрасываем выбранный пункт
+        if (window.currentSearchCity && window.currentSearchCity !== parsedAddress.city) {
+            clearSelectedPoint();
+        }
+        
         window.currentSearchCity = parsedAddress.city;
         window.currentSearchStreet = parsedAddress.street;
         
@@ -718,6 +724,19 @@ jQuery(document).ready(function($) {
         updateOrderSummary(point);
     }
     
+    function clearSelectedPoint() {
+        selectedPoint = null;
+        $('#cdek-selected-point').hide();
+        $('#cdek-point-info').html('');
+        
+        // Удаляем скрытые поля
+        $('#cdek-selected-point-code').remove();
+        $('#cdek-selected-point-data').remove();
+        
+        // Сбрасываем информацию о доставке
+        resetCdekShippingToDefault();
+    }
+    
     function formatPointInfo(point) {
         var pointName = point.name || 'Пункт выдачи';
         if (pointName.includes(',')) {
@@ -815,6 +834,9 @@ jQuery(document).ready(function($) {
         if (address) {
             descriptionElement.html('<small style="color: #666;">' + address + '</small>');
         }
+        
+        // Сохраняем стоимость доставки для правильного пересчета
+        window.currentDeliveryCost = deliveryCost;
     }
     
     function showDeliveryCalculationLoader() {
@@ -902,7 +924,12 @@ jQuery(document).ready(function($) {
             var labelElement = $item.find('.wc-block-components-totals-item__label');
             var labelText = labelElement.text();
             
-            if (labelText.indexOf('СДЭК') !== -1 || labelText.indexOf('Выберите пункт выдачи') !== -1) {
+            if (labelText.indexOf('СДЭК') !== -1 || 
+                labelText.indexOf('Выберите пункт выдачи') !== -1 ||
+                labelText.indexOf('Москва') !== -1 ||
+                labelText.indexOf('Санкт-Петербург') !== -1 ||
+                labelText.includes('пункт выдачи')) {
+                
                 labelElement.text('Выберите пункт выдачи');
                 
                 var valueElement = $item.find('.wc-block-components-totals-item__value');
@@ -912,6 +939,12 @@ jQuery(document).ready(function($) {
                 descriptionElement.html('');
             }
         });
+        
+        // Сбрасываем сохраненную стоимость
+        window.currentDeliveryCost = 0;
+        
+        // Пересчитываем общую сумму без доставки
+        updateOrderTotal(0);
     }
     
     function initCdekDelivery() {
@@ -986,6 +1019,37 @@ jQuery(document).ready(function($) {
         isInitialized = true;
     }
     
+    // ====== ФУНКЦИИ ДЛЯ СКРЫТИЯ ПОЛЕЙ ======
+    
+    function hideUnnecessaryFields() {
+        // Скрываем поля города, области и индекса
+        var fieldsToHide = [
+            '#shipping-city', '#shipping-state', '#shipping-postcode',
+            '#billing-city', '#billing-state', '#billing-postcode',
+            'input[name="shipping_city"]', 'input[name="shipping_state"]', 'input[name="shipping_postcode"]',
+            'input[name="billing_city"]', 'input[name="billing_state"]', 'input[name="billing_postcode"]'
+        ];
+        
+        fieldsToHide.forEach(function(selector) {
+            $(selector).hide().closest('.wc-block-components-text-input').hide();
+        });
+        
+        // Скрываем контейнеры по классам
+        $('.wc-block-components-address-form__city, .wc-block-components-address-form__state, .wc-block-components-address-form__postcode').hide();
+        
+        // Скрываем по содержимому текста
+        $('label').each(function() {
+            var text = $(this).text().toLowerCase();
+            if (text.includes('город') && !text.includes('адрес') || 
+                text.includes('область') || 
+                text.includes('район') || 
+                text.includes('индекс') || 
+                text.includes('почтовый')) {
+                $(this).closest('.wc-block-components-text-input').hide();
+            }
+        });
+    }
+    
     // ====== ИНИЦИАЛИЗАЦИЯ И ОБРАБОТЧИКИ СОБЫТИЙ ======
     
     // Инициализация при выборе доставки СДЭК
@@ -1032,6 +1096,9 @@ jQuery(document).ready(function($) {
         
         mutations.forEach(function(mutation) {
             if (mutation.type === 'childList') {
+                // Скрываем ненужные поля при любых изменениях DOM
+                hideUnnecessaryFields();
+                
                 $('.wc-block-components-totals-item__label').each(function() {
                     var text = $(this).text();
                     if (text.includes('СДЭК') && text.includes('Пункт выдачи')) {
@@ -1073,6 +1140,8 @@ jQuery(document).ready(function($) {
     
     // Начальная инициализация
     setTimeout(function() {
+        hideUnnecessaryFields(); // Скрываем поля сразу
+        
         $('.wc-block-components-totals-item__label').each(function() {
             var text = $(this).text();
             if (text.includes('СДЭК') && text.includes('Пункт выдачи')) {
@@ -1082,6 +1151,7 @@ jQuery(document).ready(function($) {
     }, 100);
     
     setTimeout(function() {
+        hideUnnecessaryFields(); // Повторно скрываем поля
         initAddressAutocomplete();
         
         var cdekMethod = $('input[value*="cdek_delivery"]');
@@ -1093,12 +1163,16 @@ jQuery(document).ready(function($) {
     }, 2000);
     
     setTimeout(function() {
+        hideUnnecessaryFields(); // Еще раз скрываем поля
+        
         if ($('#address-select').length === 0 && $('#address-suggestions').length === 0) {
             initAddressAutocomplete();
         }
     }, 5000);
     
     setTimeout(function() {
+        hideUnnecessaryFields(); // Финальная проверка
+        
         if ($('input[value*="cdek_delivery"]').length > 0 && $('#cdek-map-container').length === 0 && !isInitialized) {
             initCdekDelivery();
         }

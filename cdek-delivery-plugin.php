@@ -64,6 +64,9 @@ class CdekDeliveryPlugin {
         // Вывод габаритов товаров в оформлении заказа
         add_action('woocommerce_checkout_after_order_review', array($this, 'display_product_dimensions_checkout'), 5);
         
+        // Скрытие ненужных полей через CSS
+        add_action('wp_head', array($this, 'hide_checkout_fields_css'));
+        
         // Активация плагина
         register_activation_hook(__FILE__, array($this, 'activate_plugin'));
         
@@ -95,9 +98,15 @@ class CdekDeliveryPlugin {
         unset($fields['shipping']['shipping_state']);
         unset($fields['shipping']['shipping_postcode']);
         
+        // Убираем поля для биллинга тоже
+        unset($fields['billing']['billing_city']);
+        unset($fields['billing']['billing_state']);
+        unset($fields['billing']['billing_postcode']);
+        
         // Меняем метку для поля адреса
         $fields['shipping']['shipping_address_1']['label'] = 'Город доставки';
         $fields['shipping']['shipping_address_1']['placeholder'] = 'Например: Москва';
+        $fields['shipping']['shipping_address_1']['required'] = true;
         
         return $fields;
     }
@@ -111,6 +120,7 @@ class CdekDeliveryPlugin {
         // Настраиваем поле адреса
         $fields['address_1']['label'] = 'Город доставки';
         $fields['address_1']['placeholder'] = 'Например: Москва';
+        $fields['address_1']['required'] = true;
         
         return $fields;
     }
@@ -276,6 +286,40 @@ class CdekDeliveryPlugin {
         
         echo '</div>';
         echo '</div>';
+    }
+    
+    public function hide_checkout_fields_css() {
+        if (is_checkout()) {
+            echo '<style>
+                /* Скрываем ненужные поля города, области и индекса */
+                .wc-block-components-address-form__city,
+                .wc-block-components-address-form__state,
+                .wc-block-components-address-form__postcode,
+                #shipping-city,
+                #shipping-state,
+                #shipping-postcode,
+                #billing-city,
+                #billing-state,
+                #billing-postcode,
+                .wc-block-components-text-input:has(#shipping-city),
+                .wc-block-components-text-input:has(#shipping-state),
+                .wc-block-components-text-input:has(#shipping-postcode) {
+                    display: none !important;
+                    visibility: hidden !important;
+                    height: 0 !important;
+                    overflow: hidden !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                /* Скрываем родительские контейнеры */
+                [class*="city"]:not([class*="address"]),
+                [class*="state"]:not([class*="address"]),
+                [class*="postcode"]:not([class*="address"]) {
+                    display: none !important;
+                }
+            </style>';
+        }
     }
     
     public function add_admin_menu() {

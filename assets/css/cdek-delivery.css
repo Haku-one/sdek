@@ -145,6 +145,41 @@
     display: none !important;
 }
 
+/* Скрытие полей города, области и индекса */
+.wc-block-components-address-form__city,
+.wc-block-components-address-form__state,
+.wc-block-components-address-form__postcode,
+#shipping-city,
+#shipping-state,
+#shipping-postcode,
+#billing-city,
+#billing-state,
+#billing-postcode {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Скрытие контейнеров с полями города, области и индекса */
+.wc-block-components-text-input:has(#shipping-city),
+.wc-block-components-text-input:has(#shipping-state),
+.wc-block-components-text-input:has(#shipping-postcode),
+.wc-block-components-text-input:has(#billing-city),
+.wc-block-components-text-input:has(#billing-state),
+.wc-block-components-text-input:has(#billing-postcode) {
+    display: none !important;
+}
+
+/* Альтернативные селекторы для скрытия */
+[class*="city"]:not([class*="address"]):not([class*="block"]),
+[class*="state"]:not([class*="address"]):not([class*="block"]),
+[class*="postcode"]:not([class*="address"]):not([class*="block"]) {
+    display: none !important;
+}
+
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
     #cdek-map-container {
