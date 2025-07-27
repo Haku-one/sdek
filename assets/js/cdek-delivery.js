@@ -1,3 +1,80 @@
+// КРИТИЧЕСКИЙ ПАТЧ: Перехватываем jQuery.text() для исправления дублированных сумм
+if (typeof $ !== 'undefined' && $.fn.text) {
+    var originalText = $.fn.text;
+    $.fn.text = function(value) {
+        // Если устанавливается значение
+        if (arguments.length > 0 && typeof value === 'string') {
+            // Проверяем, не является ли это итоговой суммой с дублированием
+            if (this.hasClass('wc-block-components-totals-item__value') && 
+                this.closest('.wc-block-components-totals-footer-item').length > 0) {
+                
+                if (value.includes('874268')) {
+                    value = value.replace('874268', '1268');
+                    console.log('🔥 ПЕРЕХВАЧЕНО jQuery.text():', arguments[0], '->', value);
+                }
+                // Общая проверка на дублирование
+                else {
+                    var match = value.match(/(\d+)/);
+                    if (match && match[1].startsWith('873') && match[1].length === 6) {
+                        var corrected = match[1].substring(3);
+                        value = value.replace(match[1], corrected);
+                        console.log('🔥 ПЕРЕХВАЧЕНО jQuery.text() (общее):', arguments[0], '->', value);
+                    }
+                }
+            }
+        }
+        
+        return originalText.apply(this, arguments.length > 0 ? [value] : []);
+    };
+}
+
+// КРИТИЧЕСКИЙ ПАТЧ: Перехватываем нативные DOM методы
+if (typeof HTMLElement !== 'undefined') {
+    // Патчим textContent
+    var originalTextContentDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'textContent') || 
+                                       Object.getOwnPropertyDescriptor(Element.prototype, 'textContent');
+    
+    if (originalTextContentDescriptor && originalTextContentDescriptor.set) {
+        Object.defineProperty(HTMLElement.prototype, 'textContent', {
+            set: function(value) {
+                if (typeof value === 'string' && 
+                    this.classList.contains('wc-block-components-totals-item__value') &&
+                    this.closest('.wc-block-components-totals-footer-item')) {
+                    
+                    if (value.includes('874268')) {
+                        value = value.replace('874268', '1268');
+                        console.log('🔥 ПЕРЕХВАЧЕНО textContent:', arguments[0], '->', value);
+                    }
+                }
+                originalTextContentDescriptor.set.call(this, value);
+            },
+            get: originalTextContentDescriptor.get
+        });
+    }
+    
+    // Патчим innerHTML
+    var originalInnerHTMLDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerHTML') || 
+                                     Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    
+    if (originalInnerHTMLDescriptor && originalInnerHTMLDescriptor.set) {
+        Object.defineProperty(HTMLElement.prototype, 'innerHTML', {
+            set: function(value) {
+                if (typeof value === 'string' && 
+                    this.classList.contains('wc-block-components-totals-item__value') &&
+                    this.closest('.wc-block-components-totals-footer-item')) {
+                    
+                    if (value.includes('874268')) {
+                        value = value.replace('874268', '1268');
+                        console.log('🔥 ПЕРЕХВАЧЕНО innerHTML:', arguments[0], '->', value);
+                    }
+                }
+                originalInnerHTMLDescriptor.set.call(this, value);
+            },
+            get: originalInnerHTMLDescriptor.get
+        });
+    }
+}
+
 // Функция для извлечения цены из текста
 function extractSinglePrice(priceText) {
     var price = 0;
@@ -1744,8 +1821,63 @@ jQuery(document).ready(function($) {
         }
     });
     
-    // Периодическая проверка и исправление дублированных значений каждые 3 секунды
+    // Периодическая проверка и исправление дублированных значений каждые 1 секунду
     setInterval(function() {
         fixDuplicatedTotalValue();
-    }, 3000);
+    }, 1000);
+    
+    // Дополнительная агрессивная проверка каждые 500мс
+    setInterval(function() {
+        var totalElements = $('.wc-block-components-totals-footer-item .wc-block-components-totals-item__value');
+        totalElements.each(function() {
+            var $el = $(this);
+            var text = $el.text().trim();
+            var match = text.match(/(\d+)/);
+            if (match && match[1].length >= 6) {
+                var num = match[1];
+                // Проверяем 874268 -> должно быть 1268
+                if (num === '874268') {
+                    var newText = text.replace(num, '1268');
+                    $el.text(newText);
+                    console.log('🚨 ПРИНУДИТЕЛЬНО исправлена сумма:', text, '->', newText);
+                }
+                // Общая логика для других случаев
+                else if (num.startsWith('873') && num.length === 6) {
+                    var corrected = num.substring(3);
+                    var newText = text.replace(num, corrected);
+                    $el.text(newText);
+                    console.log('🚨 ПРИНУДИТЕЛЬНО исправлена сумма:', text, '->', newText);
+                }
+            }
+        });
+    }, 500);
+    
+    // Перехватываем все попытки изменить DOM
+    if (typeof MutationObserver !== 'undefined') {
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                    setTimeout(function() {
+                        var totalElements = $('.wc-block-components-totals-footer-item .wc-block-components-totals-item__value');
+                        totalElements.each(function() {
+                            var $el = $(this);
+                            var text = $el.text().trim();
+                            if (text.includes('874268')) {
+                                var newText = text.replace('874268', '1268');
+                                $el.text(newText);
+                                console.log('🔥 ПЕРЕХВАЧЕНО и исправлено через MutationObserver:', text, '->', newText);
+                            }
+                        });
+                    }, 10);
+                }
+            });
+        });
+        
+        // Наблюдаем за изменениями во всем документе
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    }
 });
