@@ -181,7 +181,7 @@ jQuery(document).ready(function($) {
         });
         
         // ПРИОРИТЕТ 3.1: Пробуем получить общую стоимость заказа из итогового блока
-        var totalOrderElement = $('.wc-block-components-totals-footer-item-tax-value, .wc-block-components-totals-footer-item .wc-block-formatted-money-amount');
+        var totalOrderElement = $('.wc-block-components-totals-footer-item .wc-block-components-totals-item__value, .wc-block-components-totals-footer-item-tax-value, .wc-block-components-totals-footer-item .wc-block-formatted-money-amount');
         var orderTotalFromFooter = 0;
         
         if (totalOrderElement.length > 0) {
@@ -209,16 +209,33 @@ jQuery(document).ready(function($) {
                         orderTotalFromFooter = parseInt(firstHalf);
                         console.log('🔍 Полное дублирование в итоговой сумме:', totalNumber, '-> исправлено на:', orderTotalFromFooter);
                     }
-                    // Частичное дублирование (180628 -> 628, где 180 - цена товара)
-                    else if (totalNumber.length === 6) {
-                        var itemPrice = parseInt(firstHalf);
-                        var possibleTotal = parseInt(secondHalf);
+                    // Частичное дублирование (например, 874268 -> 1268, где 873 - цена товара)
+                    else if (totalNumber.length >= 6) {
+                        // Проверяем разные варианты разделения
+                        var found = false;
                         
-                        // Если первая часть похожа на цену товара (100-999), а вторая на общую сумму (200-2000)
-                        if (itemPrice >= 100 && itemPrice <= 999 && possibleTotal >= 200 && possibleTotal <= 2000) {
-                            orderTotalFromFooter = possibleTotal;
-                            console.log('🔍 Частичное дублирование в итоговой сумме:', totalNumber, '(цена товара:', itemPrice, ') -> итого:', orderTotalFromFooter);
-                        } else {
+                        // Попробуем разделить на 3+3, 3+4, 4+3, 4+4 символа
+                        var splits = [
+                            {prefix: totalNumber.substring(0, 3), suffix: totalNumber.substring(3)},
+                            {prefix: totalNumber.substring(0, 4), suffix: totalNumber.substring(4)}
+                        ];
+                        
+                        for (var i = 0; i < splits.length && !found; i++) {
+                            var itemPrice = parseInt(splits[i].prefix);
+                            var possibleTotal = parseInt(splits[i].suffix);
+                            
+                            // Проверяем, может ли это быть дублированием цены товара
+                            if (itemPrice >= 100 && itemPrice <= 9999 && possibleTotal >= 200 && possibleTotal <= 99999) {
+                                // Дополнительная проверка - возможная цена товара не должна быть больше итоговой суммы
+                                if (itemPrice < possibleTotal) {
+                                    orderTotalFromFooter = possibleTotal;
+                                    console.log('🔍 Частичное дублирование в итоговой сумме:', totalNumber, '(цена товара:', itemPrice, ') -> итого:', orderTotalFromFooter);
+                                    found = true;
+                                }
+                            }
+                        }
+                        
+                        if (!found) {
                             orderTotalFromFooter = parseInt(totalNumber);
                         }
                     } else {
@@ -1356,6 +1373,55 @@ jQuery(document).ready(function($) {
                 }
             });
         }
+        
+        // Исправляем дублированную итоговую сумму в существующих элементах
+        fixDuplicatedTotalValue();
+    }
+    
+    function fixDuplicatedTotalValue() {
+        var totalBlocks = $('.wc-block-components-totals-item').filter(function() {
+            var labelText = $(this).find('.wc-block-components-totals-item__label').text();
+            return labelText.indexOf('Итого') !== -1 || labelText.indexOf('Total') !== -1;
+        });
+        
+        totalBlocks.each(function() {
+            var $block = $(this);
+            var valueElement = $block.find('.wc-block-components-totals-item__value');
+            var currentText = valueElement.text().trim();
+            
+            // Извлекаем число из текста
+            var totalMatch = currentText.match(/(\d+)/);
+            if (totalMatch) {
+                var totalNumber = totalMatch[1];
+                
+                // Проверяем на дублирование (например, 874268 -> 1268)
+                if (totalNumber.length >= 6) {
+                    var found = false;
+                    
+                    // Попробуем разделить на 3+остальное
+                    var splits = [
+                        {prefix: totalNumber.substring(0, 3), suffix: totalNumber.substring(3)},
+                        {prefix: totalNumber.substring(0, 4), suffix: totalNumber.substring(4)}
+                    ];
+                    
+                    for (var i = 0; i < splits.length && !found; i++) {
+                        var itemPrice = parseInt(splits[i].prefix);
+                        var possibleTotal = parseInt(splits[i].suffix);
+                        
+                        // Проверяем логичность разделения
+                        if (itemPrice >= 100 && itemPrice <= 9999 && 
+                            possibleTotal >= 200 && possibleTotal <= 99999 && 
+                            itemPrice < possibleTotal) {
+                            
+                            var newText = currentText.replace(totalNumber, possibleTotal);
+                            valueElement.text(newText);
+                            console.log('🔧 Исправлена дублированная итоговая сумма:', currentText, '->', newText);
+                            found = true;
+                        }
+                    }
+                }
+            }
+        });
     }
     
     function hideCdekShippingBlock() {
@@ -1497,6 +1563,7 @@ jQuery(document).ready(function($) {
         // Дополнительная проверка на дубликаты через 2 секунды (для медленных устройств)
         setTimeout(function() {
             removeDuplicateTotalElements();
+            fixDuplicatedTotalValue();
         }, 2000);
         
         console.log('✅ СДЭК доставка инициализирована');
@@ -1662,6 +1729,7 @@ jQuery(document).ready(function($) {
         
         // Финальная очистка дубликатов
         removeDuplicateTotalElements();
+        fixDuplicatedTotalValue();
     }, 4000);
     
     // Обработчик для автоматического удаления дубликатов при изменении DOM
@@ -1671,7 +1739,13 @@ jQuery(document).ready(function($) {
             target.find('.wc-block-components-totals-wrapper').length > 0) {
             setTimeout(function() {
                 removeDuplicateTotalElements();
+                fixDuplicatedTotalValue();
             }, 100);
         }
     });
+    
+    // Периодическая проверка и исправление дублированных значений каждые 3 секунды
+    setInterval(function() {
+        fixDuplicatedTotalValue();
+    }, 3000);
 });
