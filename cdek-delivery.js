@@ -347,22 +347,28 @@ jQuery(document).ready(function($) {
     }
     
     function calculateDeliveryCost(point, callback) {
-        // Проверяем доступность cdek_ajax
-        if (typeof cdek_ajax === 'undefined') {
+        // Получаем данные корзины для расчета
+        var cartData = getCartDataForCalculation();
+        
+        // Проверяем доступность cdek_ajax и наличие обработчика на сервере
+        if (typeof cdek_ajax === 'undefined' || !cdek_ajax.ajax_url) {
             // Fallback: возвращаем базовую стоимость
-            callback(300);
+            callback(calculateFallbackCost(point, cartData));
             return;
         }
         
-        // Получаем данные корзины для расчета через API
-        var cartData = getCartDataForCalculation();
+        // Проверяем, что у нас есть минимально необходимые данные
+        if (!point || !point.code) {
+            callback(calculateFallbackCost(point, cartData));
+            return;
+        }
         
         // Запрашиваем расчет стоимости через API СДЭК
         $.ajax({
             url: cdek_ajax.ajax_url,
             type: 'POST',
             dataType: 'json',
-            timeout: 15000,
+            timeout: 10000,
             data: {
                 action: 'calculate_cdek_delivery_cost',
                 point_code: point.code,
@@ -370,10 +376,11 @@ jQuery(document).ready(function($) {
                 cart_weight: cartData.weight,
                 cart_dimensions: JSON.stringify(cartData.dimensions),
                 cart_value: cartData.value,
-                nonce: cdek_ajax.nonce
+                has_real_dimensions: cartData.hasRealDimensions ? 1 : 0,
+                nonce: cdek_ajax.nonce || ''
             },
             success: function(response) {
-                if (response.success && response.data && response.data.delivery_sum) {
+                if (response && response.success && response.data && response.data.delivery_sum) {
                     // Возвращаем стоимость из API
                     callback(parseInt(response.data.delivery_sum));
                 } else {
@@ -382,7 +389,16 @@ jQuery(document).ready(function($) {
                 }
             },
             error: function(xhr, status, error) {
-                // Fallback: базовая стоимость при ошибке API
+                // Проверяем тип ошибки для отладки
+                if (xhr.status === 400) {
+                    // Ошибка 400 - вероятно, нет обработчика на сервере
+                } else if (xhr.status === 500) {
+                    // Ошибка 500 - ошибка на сервере
+                } else if (status === 'timeout') {
+                    // Таймаут запроса
+                }
+                
+                // В любом случае используем fallback
                 callback(calculateFallbackCost(point, cartData));
             }
         });
@@ -519,20 +535,35 @@ jQuery(document).ready(function($) {
     
     function calculateFallbackCost(point, cartData) {
         // Fallback расчет стоимости если API недоступен
-        var baseCost = 300; // Базовая стоимость
+        var baseCost = 250; // Базовая стоимость доставки СДЭК
         
-        // Дополнительная стоимость за вес свыше 1 кг
-        if (cartData.weight > 1000) { // больше 1000 грамм
-            var extraWeight = Math.ceil((cartData.weight - 1000) / 1000); // доп кг
-            baseCost += extraWeight * 50; // +50 руб за каждый доп кг
+        // Проверяем, есть ли данные корзины
+        if (!cartData) {
+            return baseCost;
         }
         
-        // Дополнительная стоимость за высокую стоимость заказа
-        if (cartData.value > 5000) {
-            baseCost += Math.ceil((cartData.value - 5000) / 1000) * 10; // +10 руб за каждую 1000 руб свыше 5000
+        // Дополнительная стоимость за вес свыше 500г
+        if (cartData.weight > 500) {
+            var extraWeight = Math.ceil((cartData.weight - 500) / 500); // по 500г
+            baseCost += extraWeight * 30; // +30 руб за каждые 500г свыше 500г
         }
         
-        return baseCost;
+        // Дополнительная стоимость за габариты (если есть реальные размеры)
+        if (cartData.hasRealDimensions && cartData.dimensions) {
+            var volume = cartData.dimensions.length * cartData.dimensions.width * cartData.dimensions.height;
+            if (volume > 12000) { // больше 12 литров (30×20×20)
+                var extraVolume = Math.ceil((volume - 12000) / 6000); // по 6 литров
+                baseCost += extraVolume * 40; // +40 руб за каждые 6 литров свыше 12л
+            }
+        }
+        
+        // Дополнительная стоимость за высокую стоимость заказа (страховка)
+        if (cartData.value > 3000) {
+            baseCost += Math.ceil((cartData.value - 3000) / 1000) * 15; // +15 руб за каждую 1000 руб свыше 3000
+        }
+        
+        // Ограничиваем максимальную стоимость разумными пределами
+        return Math.min(baseCost, 2000);
     }
     
     function updateOrderTotal(deliveryCost) {

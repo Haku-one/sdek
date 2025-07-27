@@ -71,15 +71,41 @@
 
 ## Установка
 
-1. Замените старый файл `cdek-delivery.js` на новый
-2. Добавьте файл `cdek-cart.js` в ту же директорию
-3. Подключите оба файла в WordPress:
+### ⚠️ ВАЖНО: Устранение ошибки 400
+
+Если вы видите ошибку "Failed to load resource: the server responded with a status of 400" в консоли браузера, это означает, что на сервере нет обработчика AJAX запросов.
+
+### Пошаговая установка:
+
+1. **Замените JavaScript файлы:**
+   - Замените старый файл `cdek-delivery.js` на новый
+   - Добавьте файл `cdek-cart.js` в ту же директорию
+
+2. **Добавьте серверный обработчик:**
+   - Скопируйте код из файла `cdek-server-handler.php`
+   - Добавьте его в `functions.php` вашей темы ИЛИ создайте отдельный плагин
+
+3. **Подключите скрипты (если еще не подключены):**
 
 ```php
 // В functions.php вашей темы или плагина
-wp_enqueue_script('cdek-delivery', 'path/to/cdek-delivery.js', array('jquery'), '1.0.0', true);
-wp_enqueue_script('cdek-cart', 'path/to/cdek-cart.js', array('jquery'), '1.0.0', true);
+function cdek_enqueue_scripts() {
+    wp_enqueue_script('cdek-delivery', get_template_directory_uri() . '/js/cdek-delivery.js', array('jquery'), '1.0.0', true);
+    wp_enqueue_script('cdek-cart', get_template_directory_uri() . '/js/cdek-cart.js', array('jquery'), '1.0.0', true);
+    
+    wp_localize_script('cdek-delivery', 'cdek_ajax', array(
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('cdek_ajax_nonce')
+    ));
+}
+add_action('wp_enqueue_scripts', 'cdek_enqueue_scripts');
 ```
+
+### 🔧 Если ошибка 400 остается:
+
+1. Проверьте, что код из `cdek-server-handler.php` добавлен в functions.php
+2. Убедитесь, что `wp_localize_script` правильно передает `ajax_url` и `nonce`
+3. Проверьте, что нет конфликтов с другими плагинами
 
 ## Настройки расчета стоимости
 
@@ -193,9 +219,32 @@ function handle_cdek_delivery_calculation() {
 - Если Select2 не загрузился - базовый автокомплит
 - Если геокодирование не работает - сортировка по алфавиту
 
+## Диагностика проблем
+
+### Ошибка 400 (Bad Request)
+**Причина**: Нет обработчика AJAX на сервере  
+**Решение**: Добавьте код из `cdek-server-handler.php` в functions.php
+
+### Ошибка 500 (Internal Server Error)
+**Причина**: Ошибка в PHP коде на сервере  
+**Решение**: Проверьте логи ошибок WordPress, исправьте синтаксис PHP
+
+### Показывается fallback стоимость
+**Причина**: API СДЭК недоступен или не настроен  
+**Решение**: Настройте реальное API СДЭК в функции `calculate_cdek_cost_via_api()`
+
+### Не подключаются скрипты
+**Причина**: Неверные пути к JS файлам  
+**Решение**: Проверьте пути в `wp_enqueue_script()`, убедитесь что файлы загружаются
+
+### Не работает в корзине/checkout
+**Причина**: Конфликт с другими скриптами или неправильные селекторы  
+**Решение**: Проверьте консоль браузера на JavaScript ошибки
+
 ## Примечания
 
 - Файлы оптимизированы для production использования
 - Все отладочные сообщения удалены
 - Добавлена обработка ошибок и fallback механизмы
 - Код адаптирован под различные темы WordPress
+- **ОБЯЗАТЕЛЬНО** добавьте серверный обработчик для избежания ошибки 400
