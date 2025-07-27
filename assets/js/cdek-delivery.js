@@ -8,17 +8,34 @@ if (typeof $ !== 'undefined' && $.fn.text) {
             if (this.hasClass('wc-block-components-totals-item__value') && 
                 this.closest('.wc-block-components-totals-footer-item').length > 0) {
                 
-                if (value.includes('874268')) {
-                    value = value.replace('874268', '1268');
-                    console.log('🔥 ПЕРЕХВАЧЕНО jQuery.text():', arguments[0], '->', value);
-                }
-                // Общая проверка на дублирование
-                else {
-                    var match = value.match(/(\d+)/);
-                    if (match && match[1].startsWith('873') && match[1].length === 6) {
-                        var corrected = match[1].substring(3);
-                        value = value.replace(match[1], corrected);
-                        console.log('🔥 ПЕРЕХВАЧЕНО jQuery.text() (общее):', arguments[0], '->', value);
+                var match = value.match(/(\d+)/);
+                if (match && match[1].length >= 6) {
+                    var num = match[1];
+                    var corrected = null;
+                    
+                    // Проверяем 3+остальное
+                    if (num.length >= 6) {
+                        var firstPart = num.substring(0, 3);
+                        var secondPart = num.substring(3);
+                        
+                        if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                            corrected = secondPart;
+                        }
+                    }
+                    
+                    // Проверяем 4+остальное
+                    if (!corrected && num.length >= 7) {
+                        var firstPart = num.substring(0, 4);
+                        var secondPart = num.substring(4);
+                        
+                        if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                            corrected = secondPart;
+                        }
+                    }
+                    
+                    if (corrected) {
+                        value = value.replace(num, corrected);
+                        console.log('🔥 ПЕРЕХВАЧЕНО jQuery.text():', arguments[0], '->', value);
                     }
                 }
             }
@@ -41,9 +58,35 @@ if (typeof HTMLElement !== 'undefined') {
                     this.classList.contains('wc-block-components-totals-item__value') &&
                     this.closest('.wc-block-components-totals-footer-item')) {
                     
-                    if (value.includes('874268')) {
-                        value = value.replace('874268', '1268');
-                        console.log('🔥 ПЕРЕХВАЧЕНО textContent:', arguments[0], '->', value);
+                    var match = value.match(/(\d+)/);
+                    if (match && match[1].length >= 6) {
+                        var num = match[1];
+                        var corrected = null;
+                        
+                        // Проверяем 3+остальное
+                        if (num.length >= 6) {
+                            var firstPart = num.substring(0, 3);
+                            var secondPart = num.substring(3);
+                            
+                            if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                                corrected = secondPart;
+                            }
+                        }
+                        
+                        // Проверяем 4+остальное
+                        if (!corrected && num.length >= 7) {
+                            var firstPart = num.substring(0, 4);
+                            var secondPart = num.substring(4);
+                            
+                            if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                                corrected = secondPart;
+                            }
+                        }
+                        
+                        if (corrected) {
+                            value = value.replace(num, corrected);
+                            console.log('🔥 ПЕРЕХВАЧЕНО textContent:', arguments[0], '->', value);
+                        }
                     }
                 }
                 originalTextContentDescriptor.set.call(this, value);
@@ -63,9 +106,35 @@ if (typeof HTMLElement !== 'undefined') {
                     this.classList.contains('wc-block-components-totals-item__value') &&
                     this.closest('.wc-block-components-totals-footer-item')) {
                     
-                    if (value.includes('874268')) {
-                        value = value.replace('874268', '1268');
-                        console.log('🔥 ПЕРЕХВАЧЕНО innerHTML:', arguments[0], '->', value);
+                    var match = value.match(/(\d+)/);
+                    if (match && match[1].length >= 6) {
+                        var num = match[1];
+                        var corrected = null;
+                        
+                        // Проверяем 3+остальное
+                        if (num.length >= 6) {
+                            var firstPart = num.substring(0, 3);
+                            var secondPart = num.substring(3);
+                            
+                            if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                                corrected = secondPart;
+                            }
+                        }
+                        
+                        // Проверяем 4+остальное
+                        if (!corrected && num.length >= 7) {
+                            var firstPart = num.substring(0, 4);
+                            var secondPart = num.substring(4);
+                            
+                            if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                                corrected = secondPart;
+                            }
+                        }
+                        
+                        if (corrected) {
+                            value = value.replace(num, corrected);
+                            console.log('🔥 ПЕРЕХВАЧЕНО innerHTML:', arguments[0], '->', value);
+                        }
                     }
                 }
                 originalInnerHTMLDescriptor.set.call(this, value);
@@ -1835,15 +1904,33 @@ jQuery(document).ready(function($) {
             var match = text.match(/(\d+)/);
             if (match && match[1].length >= 6) {
                 var num = match[1];
-                // Проверяем 874268 -> должно быть 1268
-                if (num === '874268') {
-                    var newText = text.replace(num, '1268');
-                    $el.text(newText);
-                    console.log('🚨 ПРИНУДИТЕЛЬНО исправлена сумма:', text, '->', newText);
+                
+                // Универсальная логика исправления дублирования
+                // Попробуем разные варианты разделения
+                var corrected = null;
+                
+                // Проверяем 3+остальное (например: 873+1196 = 8731196)
+                if (num.length >= 6) {
+                    var firstPart = num.substring(0, 3);
+                    var secondPart = num.substring(3);
+                    
+                    // Проверяем логичность (первая часть должна быть меньше второй)
+                    if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                        corrected = secondPart;
+                    }
                 }
-                // Общая логика для других случаев
-                else if (num.startsWith('873') && num.length === 6) {
-                    var corrected = num.substring(3);
+                
+                // Если не подошло, проверяем 4+остальное
+                if (!corrected && num.length >= 7) {
+                    var firstPart = num.substring(0, 4);
+                    var secondPart = num.substring(4);
+                    
+                    if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                        corrected = secondPart;
+                    }
+                }
+                
+                if (corrected) {
                     var newText = text.replace(num, corrected);
                     $el.text(newText);
                     console.log('🚨 ПРИНУДИТЕЛЬНО исправлена сумма:', text, '->', newText);
@@ -1862,10 +1949,36 @@ jQuery(document).ready(function($) {
                         totalElements.each(function() {
                             var $el = $(this);
                             var text = $el.text().trim();
-                            if (text.includes('874268')) {
-                                var newText = text.replace('874268', '1268');
-                                $el.text(newText);
-                                console.log('🔥 ПЕРЕХВАЧЕНО и исправлено через MutationObserver:', text, '->', newText);
+                            var match = text.match(/(\d+)/);
+                            if (match && match[1].length >= 6) {
+                                var num = match[1];
+                                var corrected = null;
+                                
+                                // Проверяем 3+остальное
+                                if (num.length >= 6) {
+                                    var firstPart = num.substring(0, 3);
+                                    var secondPart = num.substring(3);
+                                    
+                                    if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                                        corrected = secondPart;
+                                    }
+                                }
+                                
+                                // Проверяем 4+остальное
+                                if (!corrected && num.length >= 7) {
+                                    var firstPart = num.substring(0, 4);
+                                    var secondPart = num.substring(4);
+                                    
+                                    if (parseInt(firstPart) >= 100 && parseInt(firstPart) < parseInt(secondPart)) {
+                                        corrected = secondPart;
+                                    }
+                                }
+                                
+                                if (corrected) {
+                                    var newText = text.replace(num, corrected);
+                                    $el.text(newText);
+                                    console.log('🔥 ПЕРЕХВАЧЕНО через MutationObserver:', text, '->', newText);
+                                }
                             }
                         });
                     }, 10);
