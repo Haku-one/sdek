@@ -180,9 +180,70 @@ jQuery(document).ready(function($) {
             cartWeight: cartWeight
         });
         
-        // ПРИОРИТЕТ 3: Если не нашли в скрытых полях, пробуем из WC блоков товаров
+        // ПРИОРИТЕТ 3.1: Пробуем получить общую стоимость заказа из итогового блока
+        var totalOrderElement = $('.wc-block-components-totals-footer-item-tax-value, .wc-block-components-totals-footer-item .wc-block-formatted-money-amount');
+        var orderTotalFromFooter = 0;
+        
+        if (totalOrderElement.length > 0) {
+            var totalText = totalOrderElement.first().text().trim();
+            console.log('Найдена итоговая сумма заказа:', totalText);
+            
+            // Проверяем на дублирование в итоговой сумме (например, "180628" вместо "628")
+            var totalMatch = totalText.match(/(\d+)/);
+            if (totalMatch) {
+                var totalNumber = totalMatch[1];
+                console.log('Число из итоговой суммы:', totalNumber);
+                
+                // Проверяем на дублирование в итоговой сумме
+                if (totalNumber.length >= 6) {
+                    // Попробуем разные варианты дублирования
+                    // Случай 1: 180628 -> проверяем 180 + 628 = 808, но сумма может быть 628
+                    // Случай 2: полное дублирование типа 180180 -> 180
+                    
+                    var halfLength = Math.floor(totalNumber.length / 2);
+                    var firstHalf = totalNumber.substring(0, halfLength);
+                    var secondHalf = totalNumber.substring(halfLength);
+                    
+                    // Полное дублирование (180180 -> 180)
+                    if (firstHalf === secondHalf && halfLength >= 3) {
+                        orderTotalFromFooter = parseInt(firstHalf);
+                        console.log('🔍 Полное дублирование в итоговой сумме:', totalNumber, '-> исправлено на:', orderTotalFromFooter);
+                    }
+                    // Частичное дублирование (180628 -> 628, где 180 - цена товара)
+                    else if (totalNumber.length === 6) {
+                        var itemPrice = parseInt(firstHalf);
+                        var possibleTotal = parseInt(secondHalf);
+                        
+                        // Если первая часть похожа на цену товара (100-999), а вторая на общую сумму (200-2000)
+                        if (itemPrice >= 100 && itemPrice <= 999 && possibleTotal >= 200 && possibleTotal <= 2000) {
+                            orderTotalFromFooter = possibleTotal;
+                            console.log('🔍 Частичное дублирование в итоговой сумме:', totalNumber, '(цена товара:', itemPrice, ') -> итого:', orderTotalFromFooter);
+                        } else {
+                            orderTotalFromFooter = parseInt(totalNumber);
+                        }
+                    } else {
+                        orderTotalFromFooter = parseInt(totalNumber);
+                    }
+                } else {
+                    orderTotalFromFooter = parseInt(totalNumber) || 0;
+                }
+            }
+        }
+        
+        // ПРИОРИТЕТ 3.2: Если не нашли в скрытых полях, пробуем из WC блоков товаров
+        var processedItems = new Set(); // Для предотвращения дублирования
         $('.wc-block-components-order-summary-item').each(function() {
             var $item = $(this);
+            
+            // Создаем уникальный идентификатор товара для предотвращения дублирования
+            var itemName = $item.find('.wc-block-components-product-name').text().trim();
+            var itemId = itemName + '_' + $item.index();
+            
+            if (processedItems.has(itemId)) {
+                console.log('⚠️ Пропускаем дублированный товар:', itemName);
+                return; // Пропускаем уже обработанный товар
+            }
+            processedItems.add(itemId);
             
             // Получаем количество товара
             var quantityElement = $item.find('.wc-block-components-order-summary-item__quantity span[aria-hidden="true"]');
@@ -372,8 +433,12 @@ jQuery(document).ready(function($) {
             cartWeight = 500;
         }
         
-        // Получаем общую стоимость если не удалось по товарам
-        if (cartValue === 0) {
+        // Используем итоговую сумму заказа если она найдена и больше суммы по товарам
+        if (orderTotalFromFooter > 0) {
+            console.log('💰 Используем итоговую сумму заказа:', orderTotalFromFooter, 'руб. (вместо суммы по товарам:', cartValue, 'руб.)');
+            cartValue = orderTotalFromFooter;
+        } else if (cartValue === 0) {
+            // Получаем общую стоимость если не удалось по товарам
             var subtotalElement = $('.wc-block-components-totals-item').filter(function() {
                 var labelText = $(this).find('.wc-block-components-totals-item__label').text();
                 return labelText.indexOf('Подытог') !== -1 || labelText.indexOf('Subtotal') !== -1;
