@@ -528,11 +528,20 @@ class CdekAPI {
     public function __construct() {
         $this->account = get_option('cdek_account', 'Lr7x5fauu0eOXDA4hlK04HiMUpqHgzzR');
         $this->password = get_option('cdek_password', 'fzwKqoaKaTrwRjxVhf6csNzTefyHRHYM');
-        $this->test_mode = get_option('cdek_test_mode', 0);
-        $this->base_url = $this->test_mode ? 'https://api.edu.cdek.ru/v2' : 'https://api.cdek.ru/v2';
+        
+        // ПРИНУДИТЕЛЬНО ОТКЛЮЧАЕМ ТЕСТОВЫЙ РЕЖИМ - он не работает с данными учетными данными
+        $this->test_mode = 0;
+        update_option('cdek_test_mode', 0);
+        $this->base_url = 'https://api.cdek.ru/v2'; // Всегда используем продакшн API
         
         // Обновляем город отправителя на Саратов (ВСЕГДА САРАТОВ!)
         update_option('cdek_sender_city', '354');
+        
+        // Логируем настройки подключения для отладки
+        error_log('🔧 СДЭК API CONFIG: Режим - ПРОДАКШН (принудительно)');
+        error_log('🔧 СДЭК API CONFIG: URL - ' . $this->base_url);
+        error_log('🔧 СДЭК API CONFIG: Account ID - ' . substr($this->account, 0, 8) . '...');
+        error_log('🔧 СДЭК API CONFIG: Password length - ' . strlen($this->password) . ' символов');
     }
     
     public function get_auth_token() {
@@ -543,17 +552,24 @@ class CdekAPI {
             error_log('🔑 СДЭК AUTH: Получаем новый токен авторизации');
             error_log('🔑 СДЭК AUTH: URL: ' . $this->base_url . '/oauth/token');
             error_log('🔑 СДЭК AUTH: Client ID: ' . $this->account);
+            error_log('🔑 СДЭК AUTH: Client Secret: ' . substr($this->password, 0, 8) . '...');
+            
+            $auth_data = array(
+                'grant_type' => 'client_credentials',
+                'client_id' => $this->account,
+                'client_secret' => $this->password
+            );
+            
+            error_log('🔑 СДЭК AUTH: Данные авторизации: ' . print_r($auth_data, true));
             
             $response = wp_remote_post($this->base_url . '/oauth/token', array(
                 'headers' => array(
-                    'Content-Type' => 'application/x-www-form-urlencoded'
+                    'Content-Type' => 'application/x-www-form-urlencoded',
+                    'User-Agent' => 'WordPress/CDEK-Plugin'
                 ),
-                'body' => array(
-                    'grant_type' => 'client_credentials',
-                    'client_id' => $this->account,
-                    'client_secret' => $this->password
-                ),
-                'timeout' => 30
+                'body' => $auth_data,
+                'timeout' => 30,
+                'sslverify' => true
             ));
             
             if (!is_wp_error($response)) {

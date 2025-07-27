@@ -201,10 +201,46 @@ jQuery(document).ready(function($) {
             // Получаем стоимость товара
             var priceElement = $item.find('.wc-block-components-product-price__value');
             if (priceElement.length > 0) {
-                var priceText = priceElement.text().replace(/[^\d]/g, '');
-                var price = parseInt(priceText) || 0;
+                var priceText = priceElement.text().trim();
+                console.log('Исходный текст цены:', priceText);
+                
+                var price = 0;
+                
+                // Удаляем все символы кроме цифр и точек
+                var cleanPriceText = priceText.replace(/[^\d.]/g, '');
+                console.log('Очищенный текст цены:', cleanPriceText);
+                
+                if (cleanPriceText.length > 0) {
+                    // Проверяем на дублирование (например, "180180" -> "180")
+                    var numbers = cleanPriceText.split('.');
+                    var mainNumber = numbers[0]; // Берем только целую часть
+                    
+                    // Если число слишком длинное, проверяем на дублирование
+                    if (mainNumber.length >= 6) {
+                        var halfLength = Math.floor(mainNumber.length / 2);
+                        var firstHalf = mainNumber.substring(0, halfLength);
+                        var secondHalf = mainNumber.substring(halfLength);
+                        
+                        // Если обе половины одинаковы, это дублирование
+                        if (firstHalf === secondHalf && firstHalf.length >= 2) {
+                            price = parseInt(firstHalf) || 0;
+                            console.log('🔍 Обнаружено дублирование цены:', mainNumber, '-> исправлено на:', price);
+                        } else {
+                            price = parseInt(mainNumber) || 0;
+                        }
+                    } else {
+                        price = parseInt(mainNumber) || 0;
+                    }
+                } else {
+                    // Fallback: ищем первое число в исходном тексте
+                    var priceMatch = priceText.match(/(\d+)/);
+                    if (priceMatch) {
+                        price = parseInt(priceMatch[1]) || 0;
+                    }
+                }
+                
                 cartValue += price * quantity;
-                console.log('Найдена цена товара:', price, 'руб., количество:', quantity);
+                console.log('✅ Итоговая цена товара:', price, 'руб., количество:', quantity);
             }
         });
         
