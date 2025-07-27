@@ -30,27 +30,22 @@ jQuery(document).ready(function($) {
         
         console.log('Получение данных корзины для расчета...');
         
-        // Сначала пробуем получить данные из блока габаритов
-        $('#product-dimensions-info .product-dimensions').each(function() {
+        // ПРИОРИТЕТ 1: Получаем данные из скрытых полей с точными значениями
+        $('#wc-cart-data .cart-item-data').each(function() {
             var $item = $(this);
-            var dimensionsText = $item.find('span').text();
+            var length = parseFloat($item.attr('data-length')) || 0;
+            var width = parseFloat($item.attr('data-width')) || 0;
+            var height = parseFloat($item.attr('data-height')) || 0;
+            var weight = parseFloat($item.attr('data-weight')) || 0;
+            var quantity = parseInt($item.attr('data-quantity')) || 1;
+            var price = parseFloat($item.attr('data-price')) || 0;
             
-            console.log('Обработка товара с габаритами:', dimensionsText);
+            console.log('Обработка товара из WC данных:', {
+                length: length, width: width, height: height, 
+                weight: weight, quantity: quantity, price: price
+            });
             
-            // Извлекаем габариты из текста "Габариты: 10×20×30 см"
-            var dimensionsMatch = dimensionsText.match(/Габариты:\s*(\d+(?:\.\d+)?)×(\d+(?:\.\d+)?)×(\d+(?:\.\d+)?)\s*см/);
-            if (dimensionsMatch) {
-                var length = parseFloat(dimensionsMatch[1]);
-                var width = parseFloat(dimensionsMatch[2]);
-                var height = parseFloat(dimensionsMatch[3]);
-                
-                // Определяем количество товара из заголовка
-                var titleText = $item.find('strong').text();
-                var quantityMatch = titleText.match(/\(×(\d+)\)/);
-                var quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
-                
-                console.log('Найдены габариты:', {length: length, width: width, height: height, quantity: quantity});
-                
+            if (length > 0 && width > 0 && height > 0) {
                 // Рассчитываем объем
                 var itemVolume = length * width * height * quantity;
                 totalVolume += itemVolume;
@@ -62,25 +57,70 @@ jQuery(document).ready(function($) {
                 maxHeight = Math.max(maxHeight, height);
                 
                 hasValidDimensions = true;
+                console.log('✅ Найдены точные габариты из WC:', {length: length, width: width, height: height, quantity: quantity});
             }
             
-            // Извлекаем вес из текста "Вес: 500 г"
-            var weightMatch = dimensionsText.match(/Вес:\s*(\d+(?:\.\d+)?)\s*г/);
-            if (weightMatch) {
-                var weight = parseFloat(weightMatch[1]);
-                var quantity = 1;
+            if (weight > 0) {
+                cartWeight += weight * quantity;
+                console.log('✅ Найден точный вес из WC:', weight, 'г, количество:', quantity);
+            }
+            
+            cartValue += price * quantity;
+        });
+        
+        // ПРИОРИТЕТ 2: Если не нашли в скрытых полях, пробуем из визуального блока
+        if (!hasValidDimensions) {
+            $('#product-dimensions-info .product-dimensions').each(function() {
+                var $item = $(this);
+                var dimensionsText = $item.find('span').text();
                 
-                // Определяем количество из заголовка
-                var titleText = $item.find('strong').text();
-                var quantityMatch = titleText.match(/\(×(\d+)\)/);
-                if (quantityMatch) {
-                    quantity = parseInt(quantityMatch[1]);
+                console.log('Обработка товара из визуального блока:', dimensionsText);
+                
+                // Извлекаем габариты из текста "📏 Габариты: 10×20×30 см"
+                var dimensionsMatch = dimensionsText.match(/📏\s*Габариты:\s*(\d+(?:\.\d+)?)×(\d+(?:\.\d+)?)×(\d+(?:\.\d+)?)\s*см/);
+                if (dimensionsMatch) {
+                    var length = parseFloat(dimensionsMatch[1]);
+                    var width = parseFloat(dimensionsMatch[2]);
+                    var height = parseFloat(dimensionsMatch[3]);
+                    
+                    // Определяем количество товара из заголовка
+                    var titleText = $item.find('strong').text();
+                    var quantityMatch = titleText.match(/\(×(\d+)\)/);
+                    var quantity = quantityMatch ? parseInt(quantityMatch[1]) : 1;
+                    
+                    console.log('Найдены габариты из визуального блока:', {length: length, width: width, height: height, quantity: quantity});
+                    
+                    // Рассчитываем объем
+                    var itemVolume = length * width * height * quantity;
+                    totalVolume += itemVolume;
+                    totalItems += quantity;
+                    
+                    // Обновляем максимальные размеры
+                    maxLength = Math.max(maxLength, length);
+                    maxWidth = Math.max(maxWidth, width);
+                    maxHeight = Math.max(maxHeight, height);
+                    
+                    hasValidDimensions = true;
                 }
                 
-                console.log('Найден вес:', weight, 'г, количество:', quantity);
-                cartWeight += weight * quantity;
-            }
-        });
+                // Извлекаем вес из текста "⚖️ Вес: 500 г"
+                var weightMatch = dimensionsText.match(/⚖️\s*Вес:\s*(\d+(?:\.\d+)?)\s*г/);
+                if (weightMatch) {
+                    var weight = parseFloat(weightMatch[1]);
+                    var quantity = 1;
+                    
+                    // Определяем количество из заголовка
+                    var titleText = $item.find('strong').text();
+                    var quantityMatch = titleText.match(/\(×(\d+)\)/);
+                    if (quantityMatch) {
+                        quantity = parseInt(quantityMatch[1]);
+                    }
+                    
+                    console.log('Найден вес из визуального блока:', weight, 'г, количество:', quantity);
+                    cartWeight += weight * quantity;
+                }
+            });
+        }
         
         console.log('Статистика габаритов после блока product-dimensions:', {
             hasValidDimensions: hasValidDimensions,
@@ -897,16 +937,40 @@ jQuery(document).ready(function($) {
         calculateDeliveryCost(point, function(deliveryCost) {
             hideDeliveryCalculationLoader();
             
-            // Ищем ВСЕ блоки доставки которые могут содержать информацию о СДЭК
-            var allShippingBlocks = $('.wc-block-components-totals-item').filter(function() {
+            // Ищем ВСЕ блоки доставки - используем несколько стратегий поиска
+            var allShippingBlocks = $();
+            
+            // Стратегия 1: Прямой поиск в блоке доставки
+            var shippingBlocks1 = $('.wc-block-components-totals-shipping .wc-block-components-totals-item');
+            console.log('Стратегия 1 - найдено блоков в shipping:', shippingBlocks1.length);
+            
+            // Стратегия 2: Поиск в обертке заказа
+            var shippingBlocks2 = $('.wp-block-woocommerce-checkout-order-summary-shipping-block .wc-block-components-totals-item');
+            console.log('Стратегия 2 - найдено блоков в order-summary:', shippingBlocks2.length);
+            
+            // Стратегия 3: Глобальный поиск по содержимому
+            var shippingBlocks3 = $('.wc-block-components-totals-item').filter(function() {
                 var labelText = $(this).find('.wc-block-components-totals-item__label').text();
-                return labelText.indexOf('СДЭК') !== -1 || 
+                var isShippingBlock = labelText.indexOf('СДЭК') !== -1 || 
                        labelText.indexOf('Выберите пункт выдачи') !== -1 ||
+                       labelText.indexOf('Махачкала') !== -1 ||
                        labelText.indexOf('Москва') !== -1 ||
                        labelText.indexOf('Санкт-Петербург') !== -1 ||
-                       labelText.indexOf('Багратионовский') !== -1 ||
-                       labelText.indexOf('Университетский') !== -1 ||
-                       labelText.match(/^[А-Яа-я\s,]+$/) && labelText.includes(',');
+                       labelText.match(/^[А-Яа-я\s,\.\-]+$/) && labelText.includes(',');
+                       
+                if (isShippingBlock) {
+                    console.log('Найден блок доставки по содержимому:', labelText);
+                }
+                return isShippingBlock;
+            });
+            console.log('Стратегия 3 - найдено блоков по содержимому:', shippingBlocks3.length);
+            
+            // Объединяем все найденные блоки
+            allShippingBlocks = shippingBlocks1.add(shippingBlocks2).add(shippingBlocks3);
+            
+            // Убираем дубликаты
+            allShippingBlocks = allShippingBlocks.filter(function(index, element) {
+                return allShippingBlocks.index(element) === index;
             });
             
             console.log('Найдено блоков доставки для обновления:', allShippingBlocks.length);
@@ -975,6 +1039,51 @@ jQuery(document).ready(function($) {
         // Принудительно обновляем событие для WooCommerce
         $(document.body).trigger('updated_checkout');
         $(document.body).trigger('updated_cart_totals');
+        
+        // Дополнительно ищем блоки через короткий интервал (DOM может измениться)
+        setTimeout(function() {
+            updateAllCdekShippingBlocks(displayName, deliveryCost, address);
+        }, 100);
+        
+        setTimeout(function() {
+            updateAllCdekShippingBlocks(displayName, deliveryCost, address);
+        }, 500);
+    }
+    
+    // Функция для принудительного обновления всех блоков СДЭК
+    function updateAllCdekShippingBlocks(displayName, deliveryCost, address) {
+        // Ищем все возможные блоки доставки
+        var allBlocks = $('.wc-block-components-totals-item, .wp-block-woocommerce-checkout-order-summary-shipping-block .wc-block-components-totals-item');
+        
+        allBlocks.each(function() {
+            var $block = $(this);
+            var labelText = $block.find('.wc-block-components-totals-item__label').text();
+            
+            // Проверяем является ли это блоком СДЭК доставки
+            var isCdekBlock = labelText.indexOf('СДЭК') !== -1 || 
+                             labelText.indexOf('Выберите пункт выдачи') !== -1 ||
+                             labelText.indexOf('Махачкала') !== -1 ||
+                             labelText.indexOf('Москва') !== -1 ||
+                             labelText.indexOf('Санкт-Петербург') !== -1 ||
+                             (labelText.match(/^[А-Яа-я\s,\.\-]+$/) && labelText.includes(','));
+            
+            if (isCdekBlock) {
+                console.log('🔄 Принудительно обновляем блок:', labelText);
+                
+                // Обновляем все элементы блока
+                $block.find('.wc-block-components-totals-item__label').text(displayName);
+                $block.find('.wc-block-components-totals-item__value').text(deliveryCost + ' руб.');
+                
+                if (address) {
+                    var desc = $block.find('.wc-block-components-totals-item__description');
+                    if (desc.length === 0) {
+                        desc = $('<div class="wc-block-components-totals-item__description"></div>');
+                        $block.append(desc);
+                    }
+                    desc.html('<small style="color: #666;">' + address + '</small>');
+                }
+            }
+        });
     }
     
     function showDeliveryCalculationLoader() {

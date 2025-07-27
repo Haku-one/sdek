@@ -191,11 +191,17 @@ class CdekDeliveryPlugin {
         $cost_data = $cdek_api->calculate_delivery_cost_to_point($point_code, $point_data, $cart_weight, $cart_dimensions, $cart_value, $has_real_dimensions);
         
         if ($cost_data && isset($cost_data['delivery_sum']) && $cost_data['delivery_sum'] > 0) {
-            error_log('СДЭК расчет: Успешно рассчитана стоимость через API: ' . $cost_data['delivery_sum']);
+            error_log('СДЭК расчет: ✅ Успешно рассчитана стоимость через НАСТОЯЩИЙ API: ' . $cost_data['delivery_sum']);
+            
+            // Убедимся что передаем флаг успешного API расчета
+            $cost_data['api_success'] = true;
+            $cost_data['fallback'] = false;
+            
             wp_send_json_success($cost_data);
         } else {
-            error_log('СДЭК расчет: API не вернул корректную стоимость. Ответ API: ' . print_r($cost_data, true));
-            error_log('СДЭК расчет: Используем резервный расчет');
+            error_log('СДЭК расчет: ❌ API не вернул корректную стоимость.');
+            error_log('СДЭК расчет: Детали ответа API: ' . print_r($cost_data, true));
+            error_log('СДЭК расчет: ⚠️ Используем резервный расчет');
             
             // Резервный расчет только если API недоступен
             $fallback_cost = $this->calculate_fallback_cost($cart_weight, $cart_value, $cart_dimensions, $has_real_dimensions);
@@ -203,7 +209,8 @@ class CdekDeliveryPlugin {
             wp_send_json_success(array(
                 'delivery_sum' => $fallback_cost,
                 'fallback' => true,
-                'message' => 'Стоимость рассчитана резервным методом'
+                'api_success' => false,
+                'message' => 'API СДЭК недоступен, используется резервный расчет'
             ));
         }
     }
@@ -280,32 +287,95 @@ class CdekDeliveryPlugin {
             return;
         }
         
-        echo '<div id="product-dimensions-info" style="margin: 20px 0; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
-        echo '<h4>Габариты товаров в заказе:</h4>';
+        echo '<div id="product-dimensions-info" style="margin: 20px 0; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; display: block !important;">';
+        echo '<h4>📦 Габариты товаров в заказе:</h4>';
         echo '<div class="dimensions-list">';
+        
+        $has_dimensions = false;
         
         foreach ($cart_items as $cart_item_key => $cart_item) {
             $product = $cart_item['data'];
             $quantity = $cart_item['quantity'];
             
-            if ($product->get_height() && $product->get_width() && $product->get_length()) {
+            // Получаем габариты товара
+            $length = $product->get_length();
+            $width = $product->get_width(); 
+            $height = $product->get_height();
+            $weight = $product->get_weight();
+            
+            // Если хотя бы один из размеров указан, выводим товар
+            if ($length || $width || $height || $weight) {
+                $has_dimensions = true;
+                
                 echo '<div class="product-dimensions" style="margin-bottom: 10px; padding: 8px; background: white; border: 1px solid #e0e0e0; border-radius: 3px;">';
                 echo '<strong>' . $product->get_name() . '</strong>';
                 if ($quantity > 1) {
-                    echo ' (×' . $quantity . ')';
+                    echo ' <span style="color: #666;">(×' . $quantity . ')</span>';
                 }
                 echo '<br>';
                 echo '<span style="color: #666; font-size: 14px;">';
-                echo 'Габариты: ' . $product->get_length() . '×' . $product->get_width() . '×' . $product->get_height() . ' см';
-                if ($product->get_weight()) {
-                    echo ' | Вес: ' . $product->get_weight() . ' г';
+                
+                // Выводим габариты если они есть
+                if ($length && $width && $height) {
+                    echo '📏 Габариты: ' . $length . '×' . $width . '×' . $height . ' см';
+                } else {
+                    // Выводим те размеры что есть
+                    $dimensions = array();
+                    if ($length) $dimensions[] = 'Д: ' . $length . 'см';
+                    if ($width) $dimensions[] = 'Ш: ' . $width . 'см';
+                    if ($height) $dimensions[] = 'В: ' . $height . 'см';
+                    if (!empty($dimensions)) {
+                        echo '📏 ' . implode(' | ', $dimensions);
+                    }
                 }
+                
+                // Выводим вес если он есть
+                if ($weight) {
+                    if ($length || $width || $height) {
+                        echo ' | ';
+                    }
+                    echo '⚖️ Вес: ' . $weight;
+                    // Определяем единицы измерения
+                    if (get_option('woocommerce_weight_unit') === 'kg') {
+                        echo ' кг';
+                    } else {
+                        echo ' г';
+                    }
+                }
+                
                 echo '</span>';
                 echo '</div>';
             }
         }
         
+        // Если ни у одного товара нет габаритов, показываем сообщение
+        if (!$has_dimensions) {
+            echo '<div style="padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 3px; color: #856404;">';
+            echo '⚠️ <strong>Внимание:</strong> У товаров в корзине не указаны габариты и вес.<br>';
+            echo 'Стоимость доставки будет рассчитана приблизительно.';
+            echo '</div>';
+        }
+        
         echo '</div>';
+        
+        // Добавляем скрытые поля с данными для JavaScript
+        echo '<div id="wc-cart-data" style="display: none;">';
+        foreach ($cart_items as $cart_item_key => $cart_item) {
+            $product = $cart_item['data'];
+            $quantity = $cart_item['quantity'];
+            
+            echo '<div class="cart-item-data" ';
+            echo 'data-product-id="' . $product->get_id() . '" ';
+            echo 'data-quantity="' . $quantity . '" ';
+            echo 'data-length="' . ($product->get_length() ?: 0) . '" ';
+            echo 'data-width="' . ($product->get_width() ?: 0) . '" ';
+            echo 'data-height="' . ($product->get_height() ?: 0) . '" ';
+            echo 'data-weight="' . ($product->get_weight() ?: 0) . '" ';
+            echo 'data-price="' . $product->get_price() . '"';
+            echo '></div>';
+        }
+        echo '</div>';
+        
         echo '</div>';
     }
     
@@ -588,18 +658,37 @@ class CdekAPI {
                 }
             }
             
-            // Способ 6: если пункт в Москве, используем код Москвы
-            if (!$location_found && stripos($point_code, 'MSK') === 0) {
-                $to_location['code'] = 44; // Код Москвы в API СДЭК
-                error_log('СДЭК API: Используем код Москвы по коду пункта: 44');
-                $location_found = true;
-            }
-            
-            // Способ 7: если пункт в СПб, используем код СПб
-            if (!$location_found && stripos($point_code, 'SPB') === 0) {
-                $to_location['code'] = 137; // Код СПб в API СДЭК
-                error_log('СДЭК API: Используем код СПб по коду пункта: 137');
-                $location_found = true;
+            // Способ 6: Определение города по коду пункта
+            if (!$location_found) {
+                $city_codes = array(
+                    'MSK' => array('code' => 44, 'name' => 'Москва'),
+                    'SPB' => array('code' => 137, 'name' => 'Санкт-Петербург'),
+                    'MKHCH' => array('code' => 470, 'name' => 'Махачкала'),
+                    'NSK' => array('code' => 270, 'name' => 'Новосибирск'),
+                    'EKB' => array('code' => 51, 'name' => 'Екатеринбург'),
+                    'KZN' => array('code' => 172, 'name' => 'Казань'),
+                    'NN' => array('code' => 276, 'name' => 'Нижний Новгород'),
+                    'CHE' => array('code' => 56, 'name' => 'Челябинск'),
+                    'SAM' => array('code' => 350, 'name' => 'Самара'),
+                    'UFA' => array('code' => 414, 'name' => 'Уфа'),
+                    'ROV' => array('code' => 335, 'name' => 'Ростов-на-Дону'),
+                    'KRD' => array('code' => 93, 'name' => 'Краснодар'),
+                    'PERM' => array('code' => 296, 'name' => 'Пермь'),
+                    'VRN' => array('code' => 432, 'name' => 'Воронеж'),
+                    'VGG' => array('code' => 438, 'name' => 'Волгоград'),
+                    'KRS' => array('code' => 207, 'name' => 'Красноярск'),
+                    'SRT' => array('code' => 51, 'name' => 'Саратов'),
+                    'TYU' => array('code' => 409, 'name' => 'Тюмень')
+                );
+                
+                foreach ($city_codes as $prefix => $city_info) {
+                    if (stripos($point_code, $prefix) === 0) {
+                        $to_location['code'] = $city_info['code'];
+                        error_log('СДЭК API: Используем код города ' . $city_info['name'] . ' по коду пункта: ' . $city_info['code']);
+                        $location_found = true;
+                        break;
+                    }
+                }
             }
             
             if (!$location_found) {
