@@ -1,3 +1,62 @@
+// Функция для извлечения цены из текста
+function extractSinglePrice(priceText) {
+    console.log('Извлекаем цену из:', priceText);
+    
+    var price = 0;
+    
+    // Специальная обработка дублированных цен
+    // Проверяем, повторяется ли одна и та же цена в тексте
+    var pricePattern = /(\d+(?:\.\d+)?)\s*руб\.?/g;
+    var priceMatches = [];
+    var match;
+    
+    while ((match = pricePattern.exec(priceText)) !== null) {
+        priceMatches.push(parseFloat(match[1]));
+    }
+    
+    console.log('Найденные цены в тексте:', priceMatches);
+    
+    if (priceMatches.length > 0) {
+        // Берем первую найденную цену (исключаем дубли)
+        price = parseInt(priceMatches[0]) || 0;
+        console.log('✅ Используем первую цену:', price);
+    } else {
+        // Fallback: удаляем все символы кроме цифр и ищем числа
+        var cleanPriceText = priceText.replace(/[^\d.]/g, '');
+        console.log('Очищенный текст цены:', cleanPriceText);
+        
+        if (cleanPriceText.length > 0) {
+            // Разбиваем по точкам и берем первое число
+            var numbers = cleanPriceText.split('.');
+            var mainNumber = numbers[0];
+            
+            // Проверяем на дублирование типа "180180"
+            if (mainNumber.length >= 6 && mainNumber.length % 2 === 0) {
+                var halfLength = mainNumber.length / 2;
+                var firstHalf = mainNumber.substring(0, halfLength);
+                var secondHalf = mainNumber.substring(halfLength);
+                
+                if (firstHalf === secondHalf) {
+                    price = parseInt(firstHalf) || 0;
+                    console.log('🔍 Обнаружено дублирование:', mainNumber, '-> исправлено на:', price);
+                } else {
+                    price = parseInt(mainNumber) || 0;
+                }
+            } else {
+                price = parseInt(mainNumber) || 0;
+            }
+        } else {
+            // Последний fallback: ищем любое число
+            var numberMatch = priceText.match(/(\d+)/);
+            if (numberMatch) {
+                price = parseInt(numberMatch[1]) || 0;
+            }
+        }
+    }
+    
+    return price;
+}
+
 jQuery(document).ready(function($) {
     var cdekMap = null;
     var cdekPoints = [];
@@ -198,66 +257,39 @@ jQuery(document).ready(function($) {
                 }
             }
             
-            // Получаем стоимость товара
+            // Сначала ищем итоговую цену за весь товар
+            var totalPriceElement = $item.find('.wc-block-components-order-summary-item__total-price .wc-block-components-product-price__value');
             var priceElement = $item.find('.wc-block-components-product-price__value');
-            if (priceElement.length > 0) {
-                var priceText = priceElement.text().trim();
-                console.log('Исходный текст цены:', priceText);
+            
+            if (totalPriceElement.length > 0) {
+                // Используем итоговую цену (с учетом количества и скидок)
+                var totalPriceText = totalPriceElement.text().trim();
+                console.log('Найдена итоговая цена товара:', totalPriceText);
                 
-                var price = 0;
-                
-                // Специальная обработка дублированных цен
-                // Проверяем, повторяется ли одна и та же цена в тексте
-                var pricePattern = /(\d+(?:\.\d+)?)\s*руб\.?/g;
-                var priceMatches = [];
-                var match;
-                
-                while ((match = pricePattern.exec(priceText)) !== null) {
-                    priceMatches.push(parseFloat(match[1]));
-                }
-                
-                console.log('Найденные цены в тексте:', priceMatches);
-                
-                if (priceMatches.length > 0) {
-                    // Берем первую найденную цену (исключаем дубли)
-                    price = parseInt(priceMatches[0]) || 0;
-                    console.log('✅ Используем первую цену:', price);
+                var totalPriceMatch = totalPriceText.match(/(\d+(?:\.\d+)?)\s*руб\.?/);
+                if (totalPriceMatch) {
+                    var totalPrice = parseInt(totalPriceMatch[1]) || 0;
+                    cartValue += totalPrice; // Добавляем итоговую цену (уже с учетом количества)
+                    console.log('✅ Используем итоговую цену товара:', totalPrice, 'руб. (с учетом количества', quantity + ')');
                 } else {
-                    // Fallback: удаляем все символы кроме цифр и ищем числа
-                    var cleanPriceText = priceText.replace(/[^\d.]/g, '');
-                    console.log('Очищенный текст цены:', cleanPriceText);
-                    
-                    if (cleanPriceText.length > 0) {
-                        // Разбиваем по точкам и берем первое число
-                        var numbers = cleanPriceText.split('.');
-                        var mainNumber = numbers[0];
+                    console.log('⚠️ Не удалось извлечь итоговую цену, используем цену за единицу');
+                    // Fallback к цене за единицу
+                    if (priceElement.length > 0) {
+                        var priceText = priceElement.text().trim();
+                        console.log('Исходный текст цены за единицу:', priceText);
                         
-                        // Проверяем на дублирование типа "180180"
-                        if (mainNumber.length >= 6 && mainNumber.length % 2 === 0) {
-                            var halfLength = mainNumber.length / 2;
-                            var firstHalf = mainNumber.substring(0, halfLength);
-                            var secondHalf = mainNumber.substring(halfLength);
-                            
-                            if (firstHalf === secondHalf) {
-                                price = parseInt(firstHalf) || 0;
-                                console.log('🔍 Обнаружено дублирование:', mainNumber, '-> исправлено на:', price);
-                            } else {
-                                price = parseInt(mainNumber) || 0;
-                            }
-                        } else {
-                            price = parseInt(mainNumber) || 0;
-                        }
-                    } else {
-                        // Последний fallback: ищем любое число
-                        var numberMatch = priceText.match(/(\d+)/);
-                        if (numberMatch) {
-                            price = parseInt(numberMatch[1]) || 0;
-                        }
+                        var price = extractSinglePrice(priceText);
+                        cartValue += price * quantity;
+                        console.log('✅ Итоговая цена товара (расчетная):', price, 'руб., количество:', quantity);
                     }
                 }
+            } else if (priceElement.length > 0) {
+                var priceText = priceElement.text().trim();
+                console.log('Исходный текст цены за единицу:', priceText);
                 
+                var price = extractSinglePrice(priceText);
                 cartValue += price * quantity;
-                console.log('✅ Итоговая цена товара:', price, 'руб., количество:', quantity);
+                console.log('✅ Итоговая цена товара (расчетная):', price, 'руб., количество:', quantity);
             }
         });
         

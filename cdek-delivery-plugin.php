@@ -540,8 +540,8 @@ class CdekAPI {
         update_option('cdek_test_mode', 0);
         $this->base_url = 'https://api.cdek.ru/v2'; // Всегда используем продакшн API
         
-        // Устанавливаем город отправителя как Москва (код 44 работает с API)
-        update_option('cdek_sender_city', '44');
+        // Устанавливаем город отправителя как Саратов (правильный код 428)
+        update_option('cdek_sender_city', '428');
         
         // Логируем настройки подключения для отладки
         error_log('🔧 СДЭК API CONFIG: Режим - ПРОДАКШН (принудительно)');
@@ -662,7 +662,7 @@ class CdekAPI {
         
         // Подготавливаем данные для расчета  
         $from_location = array(
-            'code' => get_option('cdek_sender_city', '44') // Москва (рабочий код для API)
+            'code' => get_option('cdek_sender_city', '428') // Саратов (правильный код для API)
         );
         
         // Определяем локацию назначения
