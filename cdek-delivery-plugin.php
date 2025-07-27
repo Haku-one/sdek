@@ -172,18 +172,39 @@ class CdekDeliveryPlugin {
         
         error_log('СДЭК расчет: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
         error_log('СДЭК расчет: Размеры: ' . print_r($cart_dimensions, true));
+        error_log('СДЭК расчет: Реальные габариты: ' . ($has_real_dimensions ? 'Да' : 'Нет'));
+        
+        // Проверяем, что у нас есть все необходимые данные
+        if (empty($point_code)) {
+            error_log('СДЭК расчет: Не указан код пункта выдачи');
+            wp_send_json_error('Не указан код пункта выдачи');
+            return;
+        }
+        
+        if (empty($cart_dimensions) || !isset($cart_dimensions['length']) || !isset($cart_dimensions['width']) || !isset($cart_dimensions['height'])) {
+            error_log('СДЭК расчет: Некорректные габариты товара');
+            wp_send_json_error('Некорректные габариты товара');
+            return;
+        }
         
         $cdek_api = new CdekAPI();
         $cost_data = $cdek_api->calculate_delivery_cost_to_point($point_code, $point_data, $cart_weight, $cart_dimensions, $cart_value, $has_real_dimensions);
         
-        if ($cost_data && isset($cost_data['delivery_sum'])) {
-            error_log('СДЭК расчет: Успешно рассчитана стоимость: ' . $cost_data['delivery_sum']);
+        if ($cost_data && isset($cost_data['delivery_sum']) && $cost_data['delivery_sum'] > 0) {
+            error_log('СДЭК расчет: Успешно рассчитана стоимость через API: ' . $cost_data['delivery_sum']);
             wp_send_json_success($cost_data);
         } else {
-            error_log('СДЭК расчет: Ошибка расчета, используем fallback');
-            // Fallback расчет
+            error_log('СДЭК расчет: API не вернул корректную стоимость. Ответ API: ' . print_r($cost_data, true));
+            error_log('СДЭК расчет: Используем резервный расчет');
+            
+            // Резервный расчет только если API недоступен
             $fallback_cost = $this->calculate_fallback_cost($cart_weight, $cart_value, $cart_dimensions, $has_real_dimensions);
-            wp_send_json_success(array('delivery_sum' => $fallback_cost));
+            
+            wp_send_json_success(array(
+                'delivery_sum' => $fallback_cost,
+                'fallback' => true,
+                'message' => 'Стоимость рассчитана резервным методом'
+            ));
         }
     }
     
@@ -248,7 +269,7 @@ class CdekDeliveryPlugin {
             $base_cost += ceil(($value - 3000) / 1000) * 20;
         }
         
-        return min($base_cost, 2500);
+        return $base_cost;
     }
     
     public function display_product_dimensions_checkout() {
@@ -509,24 +530,43 @@ class CdekAPI {
         // Определяем локацию назначения
         $to_location = array();
         
-        // Для расчета до пункта выдачи используем именно код пункта
-        if ($point_code) {
-            // Для API калькулятора используем postal_code пункта, если есть
-            if ($point_data && isset($point_data['location']['postal_code'])) {
-                $to_location['postal_code'] = $point_data['location']['postal_code'];
-            } elseif ($point_data && isset($point_data['location']['city_code'])) {
+        // Для расчета до пункта выдачи используем данные пункта
+        if ($point_code && $point_data) {
+            error_log('СДЭК API: Данные пункта для определения локации: ' . print_r($point_data, true));
+            
+            // Приоритет: code > postal_code > city
+            if (isset($point_data['location']['city_code']) && !empty($point_data['location']['city_code'])) {
                 $to_location['code'] = $point_data['location']['city_code'];
+                error_log('СДЭК API: Используем city_code: ' . $point_data['location']['city_code']);
+            } elseif (isset($point_data['location']['postal_code']) && !empty($point_data['location']['postal_code'])) {
+                $to_location['postal_code'] = $point_data['location']['postal_code'];
+                error_log('СДЭК API: Используем postal_code: ' . $point_data['location']['postal_code']);
+            } elseif (isset($point_data['location']['city']) && !empty($point_data['location']['city'])) {
+                $to_location['city'] = $point_data['location']['city'];
+                error_log('СДЭК API: Используем city: ' . $point_data['location']['city']);
             } else {
-                // Если нет кода города, попробуем определить его по названию города
-                if ($point_data && isset($point_data['location']['city'])) {
-                    $to_location['city'] = $point_data['location']['city'];
-                } else {
-                    error_log('СДЭК расчет: Не удалось определить локацию назначения. Данные пункта: ' . print_r($point_data, true));
+                error_log('СДЭК расчет: Не удалось определить локацию назначения. Доступные данные: ' . print_r($point_data['location'] ?? array(), true));
+                
+                // Последняя попытка - попробуем извлечь город из адреса
+                if (isset($point_data['location']['address_full'])) {
+                    $address_parts = explode(',', $point_data['location']['address_full']);
+                    foreach ($address_parts as $part) {
+                        $part = trim($part);
+                        if (preg_match('/^г\.?\s*(.+)$/', $part, $matches)) {
+                            $to_location['city'] = trim($matches[1]);
+                            error_log('СДЭК API: Извлекли город из адреса: ' . $to_location['city']);
+                            break;
+                        }
+                    }
+                }
+                
+                if (empty($to_location)) {
+                    error_log('СДЭК расчет: Не удалось определить локацию назначения');
                     return false;
                 }
             }
         } else {
-            error_log('СДЭК расчет: Не указан код пункта выдачи');
+            error_log('СДЭК расчет: Не указан код пункта выдачи или данные пункта');
             return false;
         }
         
@@ -534,11 +574,13 @@ class CdekAPI {
         $packages = array(
             array(
                 'weight' => max(100, intval($cart_weight)), // Минимум 100г
-                'length' => intval($cart_dimensions['length']),
-                'width' => intval($cart_dimensions['width']),
-                'height' => intval($cart_dimensions['height'])
+                'length' => max(10, intval($cart_dimensions['length'])), // Минимум 10см
+                'width' => max(10, intval($cart_dimensions['width'])), // Минимум 10см
+                'height' => max(5, intval($cart_dimensions['height'])) // Минимум 5см
             )
         );
+        
+        error_log('СДЭК API: Подготовленная посылка: ' . print_r($packages[0], true));
         
         // Определяем тариф (136 - пункт выдачи)
         $tariff_code = 136;
