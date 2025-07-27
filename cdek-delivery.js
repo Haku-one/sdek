@@ -346,21 +346,64 @@ jQuery(document).ready(function($) {
         $('#address-suggestions').hide();
     }
     
-    function calculateDeliveryCost(point) {
-        // Получаем общий вес корзины из DOM
-        var cartWeight = 0;
+    function calculateDeliveryCost(point, callback) {
+        // Проверяем доступность cdek_ajax
+        if (typeof cdek_ajax === 'undefined') {
+            // Fallback: возвращаем базовую стоимость
+            callback(300);
+            return;
+        }
         
-        // Ищем все товары и их веса
+        // Получаем данные корзины для расчета через API
+        var cartData = getCartDataForCalculation();
+        
+        // Запрашиваем расчет стоимости через API СДЭК
+        $.ajax({
+            url: cdek_ajax.ajax_url,
+            type: 'POST',
+            dataType: 'json',
+            timeout: 15000,
+            data: {
+                action: 'calculate_cdek_delivery_cost',
+                point_code: point.code,
+                point_data: JSON.stringify(point),
+                cart_weight: cartData.weight,
+                cart_dimensions: JSON.stringify(cartData.dimensions),
+                cart_value: cartData.value,
+                nonce: cdek_ajax.nonce
+            },
+            success: function(response) {
+                if (response.success && response.data && response.data.delivery_sum) {
+                    // Возвращаем стоимость из API
+                    callback(parseInt(response.data.delivery_sum));
+                } else {
+                    // Fallback: базовая стоимость если API не вернул корректный ответ
+                    callback(calculateFallbackCost(point, cartData));
+                }
+            },
+            error: function(xhr, status, error) {
+                // Fallback: базовая стоимость при ошибке API
+                callback(calculateFallbackCost(point, cartData));
+            }
+        });
+    }
+    
+    function getCartDataForCalculation() {
+        var cartWeight = 0;
+        var cartValue = 0;
+        var dimensions = {
+            length: 30, // см, базовые размеры упаковки
+            width: 20,  // см
+            height: 10  // см
+        };
+        
+        // Получаем общий вес и стоимость корзины из DOM
         $('.wc-block-components-order-summary-item').each(function() {
             var $item = $(this);
             
             // Получаем количество товара
             var quantityElement = $item.find('.wc-block-components-order-summary-item__quantity span[aria-hidden="true"]');
-            var quantity = 1;
-            
-            if (quantityElement.length > 0) {
-                quantity = parseInt(quantityElement.text()) || 1;
-            }
+            var quantity = parseInt(quantityElement.text()) || 1;
             
             // Получаем вес одной единицы товара
             var weightElement = $item.find('.wc-block-components-product-details__value').filter(function() {
@@ -375,48 +418,62 @@ jQuery(document).ready(function($) {
                 if (weightMatch) {
                     var weight = parseFloat(weightMatch[1]);
                     
-                    // Конвертируем в килограммы если вес в граммах
-                    if (weightText.includes('гр') || weightText.includes('г')) {
-                        weight = weight / 1000;
+                    // Конвертируем в граммы (API СДЭК работает с граммами)
+                    if (weightText.includes('кг')) {
+                        weight = weight * 1000;
                     }
                     
                     // Умножаем на количество и добавляем к общему весу
                     cartWeight += weight * quantity;
                 }
             }
+            
+            // Получаем стоимость товара
+            var priceElement = $item.find('.wc-block-components-product-price__value');
+            if (priceElement.length > 0) {
+                var priceText = priceElement.text().replace(/[^\d]/g, '');
+                cartValue += parseInt(priceText) || 0;
+            }
         });
         
-        // Если вес не найден, используем минимальный вес
+        // Если вес не найден, используем минимальный вес (в граммах)
         if (cartWeight === 0) {
-            cartWeight = 0.5; // Минимальный вес 500г
+            cartWeight = 500; // 500 грамм
         }
         
-        // Координаты Саратова (откуда отправляем)
-        var saratovLat = 51.5924;
-        var saratovLon = 46.0347;
-        
-        // Рассчитываем расстояние от Саратова до пункта выдачи
-        var distance = 50; // Базовое расстояние если координаты не найдены
-        
-        if (point && point.location && point.location.latitude && point.location.longitude) {
-            distance = calculateDistance(saratovLat, saratovLon, point.location.latitude, point.location.longitude);
+        // Получаем общую стоимость из подытога если не удалось по товарам
+        if (cartValue === 0) {
+            var subtotalElement = $('.wc-block-components-totals-item').filter(function() {
+                var labelText = $(this).find('.wc-block-components-totals-item__label').text();
+                return labelText.indexOf('Подытог') !== -1 || labelText.indexOf('Subtotal') !== -1;
+            });
+            
+            if (subtotalElement.length > 0) {
+                var subtotalText = subtotalElement.find('.wc-block-components-totals-item__value').text();
+                cartValue = parseInt(subtotalText.replace(/[^\d]/g, '')) || 1000;
+            }
         }
         
-        // Базовая стоимость доставки от Саратова
-        var baseCost = 200; // Базовая стоимость 200 руб
-        
-        // Дополнительная стоимость за расстояние
-        if (distance > 100) {
-            var extraDistance = distance - 100;
-            var distanceCost = Math.ceil(extraDistance / 100) * 150; // +150 руб за каждые 100 км свыше 100 км
-            baseCost += distanceCost;
-        }
+        return {
+            weight: cartWeight,
+            value: cartValue,
+            dimensions: dimensions
+        };
+    }
+    
+    function calculateFallbackCost(point, cartData) {
+        // Fallback расчет стоимости если API недоступен
+        var baseCost = 300; // Базовая стоимость
         
         // Дополнительная стоимость за вес свыше 1 кг
-        if (cartWeight > 1) {
-            var extraWeight = cartWeight - 1;
-            var weightCost = Math.ceil(extraWeight) * 100; // +100 руб за каждый кг свыше 1 кг
-            baseCost += weightCost;
+        if (cartData.weight > 1000) { // больше 1000 грамм
+            var extraWeight = Math.ceil((cartData.weight - 1000) / 1000); // доп кг
+            baseCost += extraWeight * 50; // +50 руб за каждый доп кг
+        }
+        
+        // Дополнительная стоимость за высокую стоимость заказа
+        if (cartData.value > 5000) {
+            baseCost += Math.ceil((cartData.value - 5000) / 1000) * 10; // +10 руб за каждую 1000 руб свыше 5000
         }
         
         return baseCost;
@@ -1085,72 +1142,75 @@ jQuery(document).ready(function($) {
     }
     
     function updateOrderSummary(point) {
-        // Рассчитываем стоимость доставки
-        var deliveryCost = calculateDeliveryCost(point);
+        // Показываем индикатор загрузки
+        showDeliveryCalculationLoader();
         
-        // Ищем блок с информацией о доставке СДЭК (используем более широкий селектор)
-        var cdekShippingBlock = $('.wc-block-components-totals-item, .wc-block-components-totals-shipping .wc-block-components-totals-item').filter(function() {
-            var labelText = $(this).find('.wc-block-components-totals-item__label').text();
-            return labelText.indexOf('СДЭК') !== -1;
+        // Рассчитываем стоимость доставки через API
+        calculateDeliveryCost(point, function(deliveryCost) {
+            // Скрываем индикатор загрузки
+            hideDeliveryCalculationLoader();
+            
+            // Ищем блок с информацией о доставке СДЭК (используем более широкий селектор)
+            var cdekShippingBlock = $('.wc-block-components-totals-item, .wc-block-components-totals-shipping .wc-block-components-totals-item').filter(function() {
+                var labelText = $(this).find('.wc-block-components-totals-item__label').text();
+                return labelText.indexOf('СДЭК') !== -1;
+            });
+            
+            if (cdekShippingBlock.length > 0) {
+                updateShippingBlock(cdekShippingBlock, point, deliveryCost);
+            } else {
+                // Попробуем найти по другому селектору
+                var alternativeBlock = $('.wc-block-components-totals-shipping .wc-block-components-totals-item');
+                if (alternativeBlock.length > 0) {
+                    updateShippingBlock(alternativeBlock, point, deliveryCost);
+                }
+            }
+            
+            // Обновляем общую сумму заказа
+            updateOrderTotal(deliveryCost);
         });
+    }
+    
+    function updateShippingBlock(block, point, deliveryCost) {
+        // Обновляем название пункта
+        var labelElement = block.find('.wc-block-components-totals-item__label');
+        var pointName = point.name || 'Пункт выдачи';
+        if (pointName.includes(',')) {
+            pointName = pointName.split(',').slice(1).join(',').trim();
+        }
+        labelElement.text(pointName);
         
-        if (cdekShippingBlock.length > 0) {
-            // Обновляем название пункта
-            var labelElement = cdekShippingBlock.find('.wc-block-components-totals-item__label');
-            var pointName = point.name || 'Пункт выдачи';
-            if (pointName.includes(',')) {
-                pointName = pointName.split(',').slice(1).join(',').trim();
-            }
-            labelElement.text(pointName);
-            
-            // Обновляем стоимость доставки
-            var valueElement = cdekShippingBlock.find('.wc-block-components-totals-item__value');
-            valueElement.text(deliveryCost + ' руб.');
-            
-            // Добавляем описание с адресом
-            var descriptionElement = cdekShippingBlock.find('.wc-block-components-totals-item__description');
-            var address = '';
-            
-            if (point.location && point.location.address_full) {
-                address = point.location.address_full;
-            } else if (point.address) {
-                address = point.address;
-            }
-            
-            if (address) {
-                descriptionElement.html('<small style="color: #666;">' + address + '</small>');
-            }
-        } else {
-            // Попробуем найти по другому селектору
-            var alternativeBlock = $('.wc-block-components-totals-shipping .wc-block-components-totals-item');
-            if (alternativeBlock.length > 0) {
-                var labelElement = alternativeBlock.find('.wc-block-components-totals-item__label');
-                var pointName = point.name || 'Пункт выдачи';
-                if (pointName.includes(',')) {
-                    pointName = pointName.split(',').slice(1).join(',').trim();
-                }
-                labelElement.text(pointName);
-                
-                var valueElement = alternativeBlock.find('.wc-block-components-totals-item__value');
-                valueElement.text(deliveryCost + ' руб.');
-                
-                var descriptionElement = alternativeBlock.find('.wc-block-components-totals-item__description');
-                var address = '';
-                
-                if (point.location && point.location.address_full) {
-                    address = point.location.address_full;
-                } else if (point.address) {
-                    address = point.address;
-                }
-                
-                if (address) {
-                    descriptionElement.html('<small style="color: #666;">' + address + '</small>');
-                }
-            }
+        // Обновляем стоимость доставки
+        var valueElement = block.find('.wc-block-components-totals-item__value');
+        valueElement.text(deliveryCost + ' руб.');
+        
+        // Добавляем описание с адресом
+        var descriptionElement = block.find('.wc-block-components-totals-item__description');
+        var address = '';
+        
+        if (point.location && point.location.address_full) {
+            address = point.location.address_full;
+        } else if (point.address) {
+            address = point.address;
         }
         
-        // Обновляем общую сумму заказа
-        updateOrderTotal(deliveryCost);
+        if (address) {
+            descriptionElement.html('<small style="color: #666;">' + address + '</small>');
+        }
+    }
+    
+    function showDeliveryCalculationLoader() {
+        // Показываем индикатор загрузки в блоке доставки
+        var shippingBlocks = $('.wc-block-components-totals-item, .wc-block-components-totals-shipping .wc-block-components-totals-item').filter(function() {
+            var labelText = $(this).find('.wc-block-components-totals-item__label').text();
+            return labelText.indexOf('СДЭК') !== -1 || labelText.indexOf('Выберите пункт выдачи') !== -1;
+        });
+        
+        shippingBlocks.find('.wc-block-components-totals-item__value').html('<span style="color: #666;">Расчет...</span>');
+    }
+    
+    function hideDeliveryCalculationLoader() {
+        // Индикатор загрузки будет скрыт при обновлении стоимости
     }
     
     function formatWorkTime(workTime, workTimeList) {
