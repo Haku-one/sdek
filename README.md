@@ -92,16 +92,37 @@ add_action('wp_ajax_calculate_cdek_delivery_cost', 'handle_cdek_delivery_calcula
 add_action('wp_ajax_nopriv_calculate_cdek_delivery_cost', 'handle_cdek_delivery_calculation');
 
 function handle_cdek_delivery_calculation() {
+    // Проверяем nonce для безопасности
+    if (!wp_verify_nonce($_POST['nonce'], 'cdek_ajax_nonce')) {
+        wp_send_json_error('Неверный nonce');
+    }
+    
     // Получаем данные из запроса
     $point_code = sanitize_text_field($_POST['point_code']);
-    $cart_weight = intval($_POST['cart_weight']);
-    $cart_value = intval($_POST['cart_value']);
+    $cart_weight = intval($_POST['cart_weight']); // вес в граммах
+    $cart_value = intval($_POST['cart_value']); // стоимость в рублях
     $cart_dimensions = json_decode(stripslashes($_POST['cart_dimensions']), true);
     
-    // Отправляем запрос к API СДЭК для расчета стоимости
-    $delivery_cost = calculate_cdek_cost_via_api($point_code, $cart_weight, $cart_dimensions, $cart_value);
+    // Подготавливаем данные для API СДЭК
+    $packages = array(
+        array(
+            'weight' => $cart_weight, // вес в граммах
+            'length' => $cart_dimensions['length'], // длина в см
+            'width' => $cart_dimensions['width'], // ширина в см
+            'height' => $cart_dimensions['height'] // высота в см
+        )
+    );
     
-    wp_send_json_success(array('delivery_sum' => $delivery_cost));
+    // Отправляем запрос к API СДЭК для расчета стоимости
+    $delivery_cost = calculate_cdek_cost_via_api($point_code, $packages, $cart_value);
+    
+    if ($delivery_cost !== false) {
+        wp_send_json_success(array('delivery_sum' => $delivery_cost));
+    } else {
+        // Fallback расчет если API недоступен
+        $fallback_cost = calculate_fallback_delivery_cost($cart_weight, $cart_value);
+        wp_send_json_success(array('delivery_sum' => $fallback_cost));
+    }
 }
 ```
 
@@ -112,9 +133,14 @@ function handle_cdek_delivery_calculation() {
 - **Доп. плата за стоимость**: +10 руб за каждую 1000 руб свыше 5000 руб
 
 ### Данные, собираемые с фронтенда:
-- **Вес**: Сумма весов всех товаров в корзине (в граммах)
-- **Размеры упаковки**: 30×20×10 см (по умолчанию)
+- **Вес**: Сумма весов всех товаров в корзине (в граммах из поля WooCommerce "_weight")
+- **Размеры упаковки**: Рассчитываются на основе размеров товаров из полей "_length", "_width", "_height"
 - **Стоимость**: Общая стоимость заказа
+- **Алгоритм расчета размеров**:
+  1. Если у товаров есть размеры - рассчитывается общий объем и оптимальная упаковка
+  2. Если размеров нет - используются размеры по умолчанию (30×20×10 см)
+  3. Добавляется 10% на упаковочные материалы
+  4. Размеры ограничиваются разумными пределами (10-150 см)
 
 ### Исключения для точного поиска городов:
 Система автоматически исключает похожие, но разные населенные пункты:
@@ -142,8 +168,20 @@ function handle_cdek_delivery_calculation() {
 2. **Поиск пунктов**: При вводе адреса делается запрос к серверу за списком пунктов
 3. **Фильтрация**: JavaScript фильтрует пункты по городу с учетом исключений
 4. **Отображение**: Пункты показываются на карте с автоматическим центрированием
-5. **Выбор пункта**: При клике запрашивается расчет стоимости через API
-6. **Обновление заказа**: Стоимость и адрес обновляются в итогах заказа
+5. **Сбор данных корзины**: При выборе пункта собираются:
+   - Вес из метаданных товаров (поле "Вес")
+   - Размеры из метаданных товаров (поле "Размеры" в формате "10×10×10")
+   - Стоимость из цен товаров
+6. **Расчет упаковки**: Рассчитываются оптимальные размеры упаковки
+7. **Запрос к API**: Данные отправляются на сервер для расчета через API СДЭК
+8. **Обновление заказа**: Стоимость и адрес обновляются в итогах заказа
+
+### Извлечение данных из корзины:
+- **Вес товара**: Ищется в метаданных товара по метке "Вес" (поддерживает граммы и кг)
+- **Размеры товара**: Ищутся в метаданных по метке "Размеры" или "Габариты"
+- **Формат размеров**: "10×10×10", "10x10x10", "10 × 10 × 10" (см)
+- **Количество**: Берется из отображения количества в корзине
+- **Стоимость**: Извлекается из цены товара
 
 ### AJAX запросы:
 - `get_cdek_points` - получение списка пунктов выдачи

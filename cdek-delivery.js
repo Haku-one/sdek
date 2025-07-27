@@ -391,13 +391,11 @@ jQuery(document).ready(function($) {
     function getCartDataForCalculation() {
         var cartWeight = 0;
         var cartValue = 0;
-        var dimensions = {
-            length: 30, // см, базовые размеры упаковки
-            width: 20,  // см
-            height: 10  // см
-        };
+        var totalVolume = 0; // Общий объем товаров
+        var maxLength = 0, maxWidth = 0, maxHeight = 0; // Максимальные размеры
+        var hasValidDimensions = false;
         
-        // Получаем общий вес и стоимость корзины из DOM
+        // Получаем общий вес, стоимость и размеры корзины из DOM
         $('.wc-block-components-order-summary-item').each(function() {
             var $item = $(this);
             
@@ -418,13 +416,43 @@ jQuery(document).ready(function($) {
                 if (weightMatch) {
                     var weight = parseFloat(weightMatch[1]);
                     
-                    // Конвертируем в граммы (API СДЭК работает с граммами)
+                    // В WooCommerce вес уже в граммах согласно вашему примеру
+                    // Но проверим на всякий случай
                     if (weightText.includes('кг')) {
                         weight = weight * 1000;
                     }
                     
                     // Умножаем на количество и добавляем к общему весу
                     cartWeight += weight * quantity;
+                }
+            }
+            
+            // Получаем размеры товара (если есть в метаданных)
+            var dimensionsElement = $item.find('.wc-block-components-product-details__value').filter(function() {
+                var siblingLabel = $(this).siblings('.wc-block-components-product-details__name');
+                return siblingLabel.text().indexOf('Размеры') !== -1 || siblingLabel.text().indexOf('Габариты') !== -1;
+            });
+            
+            if (dimensionsElement.length > 0) {
+                var dimensionsText = dimensionsElement.text().trim();
+                // Ищем размеры в формате "10×10×10" или "10x10x10" или "10 × 10 × 10"
+                var dimensionsMatch = dimensionsText.match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/);
+                
+                if (dimensionsMatch) {
+                    var length = parseFloat(dimensionsMatch[1]);
+                    var width = parseFloat(dimensionsMatch[2]);
+                    var height = parseFloat(dimensionsMatch[3]);
+                    
+                    // Рассчитываем объем одного товара и умножаем на количество
+                    var itemVolume = length * width * height * quantity;
+                    totalVolume += itemVolume;
+                    
+                    // Обновляем максимальные размеры
+                    maxLength = Math.max(maxLength, length);
+                    maxWidth = Math.max(maxWidth, width);
+                    maxHeight = Math.max(maxHeight, height);
+                    
+                    hasValidDimensions = true;
                 }
             }
             
@@ -435,6 +463,33 @@ jQuery(document).ready(function($) {
                 cartValue += parseInt(priceText) || 0;
             }
         });
+        
+        // Рассчитываем итоговые размеры упаковки
+        var dimensions;
+        if (hasValidDimensions && totalVolume > 0) {
+            // Если есть размеры товаров, рассчитываем упаковку
+            // Принимаем, что упаковка имеет форму параллелепипеда
+            // Берем максимальные размеры как основу и корректируем под общий объем
+            var volumeRatio = Math.pow(totalVolume / (maxLength * maxWidth * maxHeight), 1/3);
+            
+            dimensions = {
+                length: Math.ceil(maxLength * volumeRatio * 1.1), // +10% на упаковку
+                width: Math.ceil(maxWidth * volumeRatio * 1.1),
+                height: Math.ceil(maxHeight * volumeRatio * 1.1)
+            };
+            
+            // Ограничиваем минимальными и максимальными размерами
+            dimensions.length = Math.max(10, Math.min(dimensions.length, 150));
+            dimensions.width = Math.max(10, Math.min(dimensions.width, 150));
+            dimensions.height = Math.max(5, Math.min(dimensions.height, 150));
+        } else {
+            // Размеры по умолчанию, если не удалось определить
+            dimensions = {
+                length: 30, // см
+                width: 20,  // см
+                height: 10  // см
+            };
+        }
         
         // Если вес не найден, используем минимальный вес (в граммах)
         if (cartWeight === 0) {
@@ -457,7 +512,8 @@ jQuery(document).ready(function($) {
         return {
             weight: cartWeight,
             value: cartValue,
-            dimensions: dimensions
+            dimensions: dimensions,
+            hasRealDimensions: hasValidDimensions
         };
     }
     
