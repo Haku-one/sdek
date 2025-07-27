@@ -1,11 +1,8 @@
 // Функция для извлечения цены из текста
 function extractSinglePrice(priceText) {
-    console.log('Извлекаем цену из:', priceText);
-    
     var price = 0;
     
     // Специальная обработка дублированных цен
-    // Проверяем, повторяется ли одна и та же цена в тексте
     var pricePattern = /(\d+(?:\.\d+)?)\s*руб\.?/g;
     var priceMatches = [];
     var match;
@@ -14,19 +11,14 @@ function extractSinglePrice(priceText) {
         priceMatches.push(parseFloat(match[1]));
     }
     
-    console.log('Найденные цены в тексте:', priceMatches);
-    
     if (priceMatches.length > 0) {
         // Берем первую найденную цену (исключаем дубли)
         price = parseInt(priceMatches[0]) || 0;
-        console.log('✅ Используем первую цену:', price);
     } else {
         // Fallback: удаляем все символы кроме цифр и ищем числа
         var cleanPriceText = priceText.replace(/[^\d.]/g, '');
-        console.log('Очищенный текст цены:', cleanPriceText);
         
         if (cleanPriceText.length > 0) {
-            // Разбиваем по точкам и берем первое число
             var numbers = cleanPriceText.split('.');
             var mainNumber = numbers[0];
             
@@ -38,7 +30,6 @@ function extractSinglePrice(priceText) {
                 
                 if (firstHalf === secondHalf) {
                     price = parseInt(firstHalf) || 0;
-                    console.log('🔍 Обнаружено дублирование:', mainNumber, '-> исправлено на:', price);
                 } else {
                     price = parseInt(mainNumber) || 0;
                 }

@@ -173,11 +173,7 @@ class CdekDeliveryPlugin {
         $cart_value = floatval($_POST['cart_value']);
         $has_real_dimensions = intval($_POST['has_real_dimensions']);
         
-        // Временное логирование в файл для отладки
-        $debug_log = "/workspace/cdek-debug.log";
-        file_put_contents($debug_log, "[" . date('Y-m-d H:i:s') . "] AJAX Запрос на расчет доставки\n", FILE_APPEND);
-        file_put_contents($debug_log, "Код пункта: " . $point_code . ", Вес: " . $cart_weight . ", Стоимость: " . $cart_value . "\n", FILE_APPEND);
-        file_put_contents($debug_log, "Размеры: " . print_r($cart_dimensions, true) . "\n", FILE_APPEND);
+
         
         error_log('СДЭК расчет: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
         error_log('СДЭК расчет: Размеры: ' . print_r($cart_dimensions, true));
@@ -822,12 +818,7 @@ class CdekAPI {
         error_log('СДЭК расчет: Данные для API: ' . print_r($data, true));
         
         // Делаем запрос к API СДЭК
-        // Временное логирование в файл для отладки
-        $debug_log = "/workspace/cdek-debug.log";
-        file_put_contents($debug_log, "[" . date('Y-m-d H:i:s') . "] Отправляем запрос к API\n", FILE_APPEND);
-        file_put_contents($debug_log, "URL: " . $this->base_url . "/calculator/tariff\n", FILE_APPEND);
-        file_put_contents($debug_log, "Данные: " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
-        file_put_contents($debug_log, "Токен: " . substr($token, 0, 20) . "...\n", FILE_APPEND);
+
         
         error_log('🚀 СДЭК API: Отправляем запрос к ' . $this->base_url . '/calculator/tariff');
         error_log('📤 СДЭК API: Данные запроса: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
@@ -851,10 +842,7 @@ class CdekAPI {
         $body = wp_remote_retrieve_body($response);
         $headers = wp_remote_retrieve_headers($response);
         
-        // Логируем ответ
-        file_put_contents($debug_log, "[" . date('Y-m-d H:i:s') . "] Ответ API\n", FILE_APPEND);
-        file_put_contents($debug_log, "HTTP код: " . $response_code . "\n", FILE_APPEND);
-        file_put_contents($debug_log, "Тело ответа: " . $body . "\n", FILE_APPEND);
+
         
         error_log('📥 СДЭК API: HTTP код ответа: ' . $response_code);
         error_log('📥 СДЭК API: Заголовки ответа: ' . print_r($headers, true));
