@@ -531,8 +531,8 @@ class CdekAPI {
         $this->test_mode = get_option('cdek_test_mode', 0);
         $this->base_url = $this->test_mode ? 'https://api.edu.cdek.ru/v2' : 'https://api.cdek.ru/v2';
         
-        // Обновляем город отправителя на Саратов
-        update_option('cdek_sender_city', '51');
+        // Обновляем город отправителя на Москву (там есть склады СДЭК)
+        update_option('cdek_sender_city', '44');
     }
     
     public function get_auth_token() {
@@ -638,9 +638,9 @@ class CdekAPI {
         
         error_log('✅ СДЭК РАСЧЕТ: Токен авторизации получен: ' . substr($token, 0, 20) . '...');
         
-        // Подготавливаем данные для расчета
+        // Подготавливаем данные для расчета  
         $from_location = array(
-            'code' => get_option('cdek_sender_city', '51') // Саратов
+            'code' => get_option('cdek_sender_city', '44') // Москва (там точно есть склады)
         );
         
         // Определяем локацию назначения
@@ -723,7 +723,7 @@ class CdekAPI {
                     'VRN' => array('code' => 432, 'name' => 'Воронеж'),
                     'VGG' => array('code' => 438, 'name' => 'Волгоград'),
                     'KRS' => array('code' => 207, 'name' => 'Красноярск'),
-                    'SRT' => array('code' => 51, 'name' => 'Саратов'),
+                    'SRT' => array('code' => 354, 'name' => 'Саратов'),
                     'TYU' => array('code' => 409, 'name' => 'Тюмень')
                 );
                 
@@ -763,8 +763,11 @@ class CdekAPI {
         
         error_log('СДЭК API: Подготовленная посылка: ' . print_r($packages[0], true));
         
-        // Определяем тариф (136 - пункт выдачи)
-        $tariff_code = 136;
+        // Определяем тариф для доставки до пункта выдачи
+        // 233 - Эконом склад-склад (для регионов)
+        // 234 - Стандарт склад-склад  
+        // 136 - Посылка склад-постамат/пункт выдачи
+        $tariff_code = 233; // Используем эконом тариф
         
         $data = array(
             'type' => 1, // Тип заказа: интернет-магазин
@@ -773,6 +776,8 @@ class CdekAPI {
             'to_location' => $to_location,
             'packages' => $packages
         );
+        
+        error_log('📋 СДЭК API: Используем тариф ' . $tariff_code . ' от города ' . $from_location['code'] . ' до города ' . (isset($to_location['code']) ? $to_location['code'] : 'не определен'));
         
         // Добавляем услуги если нужны
         $services = array();
@@ -852,8 +857,8 @@ class CdekAPI {
     private function try_alternative_calculation($original_data, $token) {
         error_log('СДЭК расчет: Пробуем альтернативный метод расчета');
         
-        // Попробуем разные тарифы
-        $alternative_tariffs = [136, 138]; // Пункт выдачи, Постамат
+        // Попробуем разные тарифы для пунктов выдачи
+        $alternative_tariffs = [233, 234, 291]; // Эконом, Стандарт, СДЭК Express склад-склад
         
         foreach ($alternative_tariffs as $tariff) {
             $data = $original_data;
