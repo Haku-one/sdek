@@ -1386,7 +1386,7 @@ jQuery(document).ready(function($) {
             });
         }
         
-        var maxPoints = window.innerWidth <= 768 ? 50 : 380; // Ограничиваем для мобильных
+        var maxPoints = 380; // Показываем все доступные ПВЗ
         var pointsToShow = filteredPoints.slice(0, maxPoints);
         
         var pointsInfo = '';
@@ -2053,9 +2053,10 @@ jQuery(document).ready(function($) {
     window.lastSelectedPointCode = null;
     window.currentSearchCity = null;
     
-    console.log('🚀 СДЭК Delivery Fixed v2.1 загружен');
+    console.log('🚀 СДЭК Delivery Fixed v2.2 загружен');
     console.log('✅ Исправления: умный поиск, индикаторы загрузки, производительность');
     console.log('🔍 Предотвращение повторных поисков');
     console.log('🏙️ Поддержка 1000+ городов России');
+    console.log('📍 Показ до 380 ПВЗ на всех устройствах');
     console.log('📱 Оптимизировано для мобильных устройств');
 });

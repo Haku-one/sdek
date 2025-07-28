@@ -1386,7 +1386,7 @@ jQuery(document).ready(function($) {
             });
         }
         
-        var maxPoints = window.innerWidth <= 768 ? 50 : 380; // Ограничиваем для мобильных
+        var maxPoints = 380; // Показываем все доступные ПВЗ
         var pointsToShow = filteredPoints.slice(0, maxPoints);
         
         var pointsInfo = '';
