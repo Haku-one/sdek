@@ -1002,10 +1002,14 @@ jQuery(document).ready(function($) {
     // ====== ФУНКЦИИ ДЛЯ РАБОТЫ С ПУНКТАМИ ВЫДАЧИ ======
     
     function searchCdekPoints(address) {
+        console.log('🚚 СДЭК: Поиск пунктов выдачи для адреса:', address);
+        
         var parsedAddress = parseAddress(address);
+        console.log('🚚 СДЭК: Распарсенный адрес:', parsedAddress);
         
         // Если город изменился, сбрасываем выбранный пункт
         if (window.currentSearchCity && window.currentSearchCity !== parsedAddress.city) {
+            console.log('🚚 СДЭК: Город изменился, сбрасываем выбранный пункт');
             clearSelectedPoint();
         }
         
@@ -1013,28 +1017,37 @@ jQuery(document).ready(function($) {
         window.currentSearchStreet = parsedAddress.street;
         
         if (typeof cdek_ajax === 'undefined') {
+            console.log('🚚 СДЭК: ОШИБКА: cdek_ajax не определен');
             return;
         }
         
+        console.log('🚚 СДЭК: Начинаем геокодирование адреса');
         geocodeAddress(address, function(coords) {
+            console.log('🚚 СДЭК: Получены координаты:', coords);
             window.currentSearchCoordinates = coords;
             performCdekSearch();
         });
     }
     
     function performCdekSearch() {
+        console.log('🚚 СДЭК: Выполняем поиск пунктов выдачи');
+        
         var currentTime = Date.now();
         if (cdekPointsCache && (currentTime - lastSearchTime) < cacheExpiry) {
+            console.log('🚚 СДЭК: Используем кэшированные данные');
             displayCdekPoints(cdekPointsCache);
             return;
         }
         
         if (isSearching) {
+            console.log('🚚 СДЭК: Поиск уже выполняется, пропускаем');
             return;
         }
         
+        console.log('🚚 СДЭК: Устанавливаем флаг поиска');
         isSearching = true;
         
+        console.log('🚚 СДЭК: Отправляем AJAX запрос для получения пунктов выдачи');
         $.ajax({
             url: cdek_ajax.ajax_url,
             type: 'POST',
@@ -1046,21 +1059,28 @@ jQuery(document).ready(function($) {
                 nonce: cdek_ajax.nonce
             },
             success: function(response) {
+                console.log('🚚 СДЭК: AJAX запрос успешен:', response);
                 if (response.success && response.data) {
+                    console.log('🚚 СДЭК: Получено пунктов выдачи:', response.data.length);
                     cdekPointsCache = response.data;
                     lastSearchTime = currentTime;
                     displayCdekPoints(response.data);
+                } else {
+                    console.log('🚚 СДЭК: Ответ не содержит данных:', response);
                 }
                 isSearching = false;
             },
             error: function(xhr, status, error) {
+                console.log('🚚 СДЭК: ОШИБКА AJAX запроса:', {xhr: xhr, status: status, error: error});
                 isSearching = false;
                 
                 if (cdekPointsCache) {
+                    console.log('🚚 СДЭК: Используем кэшированные данные при ошибке');
                     displayCdekPoints(cdekPointsCache);
                 }
                 
                 if (xhr.status === 0 || status === 'error') {
+                    console.log('🚚 СДЭК: Повторяем запрос через 5 секунд');
                     setTimeout(function() {
                         if (!isSearching) {
                             performCdekSearch();
@@ -1682,13 +1702,18 @@ jQuery(document).ready(function($) {
     }
     
     function initCdekDelivery() {
+        console.log('🚚 СДЭК: Начало инициализации initCdekDelivery()');
+        
         if (isInitialized) {
+            console.log('🚚 СДЭК: Уже инициализировано, пропускаем');
             return;
         }
         
+        console.log('🚚 СДЭК: Удаляем дублированные элементы итоговой суммы');
         // Удаляем дублированные элементы итоговой суммы (особенно важно для мобильных устройств)
         removeDuplicateTotalElements();
         
+        console.log('🚚 СДЭК: Скрываем блок доставки');
         hideCdekShippingBlock();
         
         if ($('#cdek-map-container').length === 0) {
@@ -1755,8 +1780,11 @@ jQuery(document).ready(function($) {
         
         isInitialized = true;
         
+        console.log('🚚 СДЭК: Установлен флаг isInitialized = true');
+        
         // Дополнительная проверка на дубликаты через 2 секунды (для медленных устройств)
         setTimeout(function() {
+            console.log('🚚 СДЭК: Дополнительная проверка дубликатов через 2 секунды');
             removeDuplicateTotalElements();
             fixDuplicatedTotalValue();
         }, 2000);
@@ -1799,11 +1827,15 @@ jQuery(document).ready(function($) {
     
     // Инициализация при выборе доставки СДЭК
     $(document).on('change', 'input[name="shipping_method[0]"], input[name*="radio-control"], input[value*="cdek_delivery"]', function() {
+        console.log('🚚 СДЭК: Изменение метода доставки:', $(this).val());
+        
         if ($(this).val().indexOf('cdek_delivery') !== -1) {
+            console.log('🚚 СДЭК: Выбран метод СДЭК, инициализируем...');
             setTimeout(function() {
                 initCdekDelivery();
             }, 100);
         } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1) {
+            console.log('🚚 СДЭК: Выбран другой метод доставки, скрываем карту');
             hideCdekMap();
             resetCdekShippingToDefault();
         }

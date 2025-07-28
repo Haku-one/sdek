@@ -26,6 +26,9 @@ define('CDEK_DELIVERY_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CDEK_DELIVERY_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('CDEK_DELIVERY_VERSION', '1.0.0');
 
+// Подключаем систему логирования
+require_once(CDEK_DELIVERY_PLUGIN_PATH . 'checkout-form-logger.php');
+
 // Основной класс плагина
 class CdekDeliveryPlugin {
     
