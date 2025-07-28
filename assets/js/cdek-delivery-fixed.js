@@ -1025,13 +1025,18 @@ jQuery(document).ready(function($) {
             var query = $(this).val().trim();
             
             if (query.length >= 2) {
+                // Показываем индикатор поиска городов
+                showSearchLoader();
+                
                 addressSearch.search(query, function(suggestions) {
                     currentSuggestions = suggestions;
                     currentHighlight = -1;
+                    hideSearchLoader();
                     showAddressSuggestions(suggestions, query);
                 });
             } else {
                 hideAddressSuggestions();
+                hideSearchLoader();
             }
         });
         
@@ -1067,6 +1072,25 @@ jQuery(document).ready(function($) {
             if (currentHighlight >= 0) {
                 suggestionsContainer.find('.suggestion-item').eq(currentHighlight).addClass('highlighted');
             }
+        }
+        
+        function showSearchLoader() {
+            var container = suggestionsContainer.find('.suggestions-list');
+            container.html(`
+                <div class="suggestion-item">
+                    <div class="suggestion-icon">🔄</div>
+                    <div class="suggestion-content">
+                        <div class="suggestion-title">Поиск городов...</div>
+                        <div class="suggestion-subtitle">Подождите несколько секунд</div>
+                    </div>
+                </div>
+            `);
+            suggestionsContainer.find('.suggestions-count').text('Поиск...');
+            suggestionsContainer.show();
+        }
+        
+        function hideSearchLoader() {
+            // Лоадер скрывается при показе результатов
         }
         
         function showAddressSuggestions(suggestions, query) {
@@ -1111,10 +1135,27 @@ jQuery(document).ready(function($) {
         }
         
         function selectSuggestion(suggestion) {
+            // Предотвращаем повторный поиск если уже выбран тот же город
+            if (window.lastSelectedCity === suggestion.city && selectedPoint) {
+                hideAddressSuggestions();
+                return;
+            }
+            
             addressInput.val(suggestion.city);
             hideAddressSuggestions();
             
             saveRecentSearch(suggestion);
+            
+            // Запоминаем выбранный город
+            window.lastSelectedCity = suggestion.city;
+            
+            // Очищаем предыдущий выбор ПВЗ только при смене города
+            if (window.currentSearchCity && window.currentSearchCity !== suggestion.city) {
+                clearSelectedPoint();
+            }
+            
+            // Показываем индикатор загрузки ПВЗ
+            showPvzLoader();
             
             debouncer.debounce('cdek-search', () => {
                 searchCdekPoints(suggestion.city);
@@ -1228,12 +1269,23 @@ jQuery(document).ready(function($) {
     function searchCdekPoints(address) {
         var parsedAddress = parseAddress(address);
         
+        // Проверяем, не ищем ли мы тот же город повторно
+        if (window.currentSearchCity === parsedAddress.city && cdekPoints && cdekPoints.length > 0) {
+            console.log('🔄 Используем кэшированные ПВЗ для города:', parsedAddress.city);
+            hidePvzLoader();
+            displayCdekPoints(cdekPoints);
+            return;
+        }
+        
+        // Очищаем выбор ПВЗ только при смене города
         if (window.currentSearchCity && window.currentSearchCity !== parsedAddress.city) {
             clearSelectedPoint();
         }
         
         window.currentSearchCity = parsedAddress.city;
         window.currentSearchStreet = parsedAddress.street;
+        
+        console.log('🔍 Поиск ПВЗ для города:', parsedAddress.city);
         
         memoizedGeocodeAddress(address, function(coords) {
             window.currentSearchCoordinates = coords;
@@ -1255,12 +1307,17 @@ jQuery(document).ready(function($) {
                 nonce: cdek_ajax.nonce
             },
             success: function(response) {
+                hidePvzLoader();
                 if (response.success && response.data) {
                     displayCdekPoints(response.data);
+                } else {
+                    showPvzError('Не удалось загрузить пункты выдачи');
                 }
             },
             error: function(xhr, status, error) {
+                hidePvzLoader();
                 console.error('Ошибка получения пунктов СДЭК:', error);
+                showPvzError('Ошибка загрузки пунктов выдачи');
             }
         });
     }
@@ -1400,6 +1457,9 @@ jQuery(document).ready(function($) {
     function selectCdekPoint(point) {
         selectedPoint = point;
         
+        // Запоминаем выбранный ПВЗ чтобы избежать повторных поисков
+        window.lastSelectedPointCode = point.code;
+        
         $('#cdek-point-info').html(formatPointInfo(point));
         $('#cdek-selected-point').show();
         
@@ -1430,10 +1490,14 @@ jQuery(document).ready(function($) {
         }
         
         updateOrderSummary(point);
+        
+        console.log('✅ Выбран ПВЗ:', point.name, '(код:', point.code + ')');
     }
     
     function clearSelectedPoint() {
         selectedPoint = null;
+        window.lastSelectedPointCode = null;
+        
         $('#cdek-selected-point').hide();
         $('#cdek-point-info').html('');
         
@@ -1441,6 +1505,8 @@ jQuery(document).ready(function($) {
         $('#cdek-selected-point-data').remove();
         
         resetCdekShippingToDefault();
+        
+        console.log('🗑️ Очищен выбор ПВЗ');
     }
     
     function formatPointInfo(point) {
@@ -1587,6 +1653,76 @@ jQuery(document).ready(function($) {
     
     function hideDeliveryCalculationLoader() {
         // Loader скрывается при обновлении стоимости
+    }
+    
+    function showPvzLoader() {
+        // Показываем лоадер в блоке с картой
+        var mapContainer = $('#cdek-map-container');
+        if (mapContainer.length > 0) {
+            if ($('#pvz-loader').length === 0) {
+                var loader = $(`
+                    <div id="pvz-loader" style="
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(255, 255, 255, 0.9);
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 1000;
+                        border-radius: 8px;
+                    ">
+                        <div style="
+                            width: 40px;
+                            height: 40px;
+                            border: 3px solid #f3f3f3;
+                            border-top: 3px solid #007cba;
+                            border-radius: 50%;
+                            animation: spin 1s linear infinite;
+                            margin-bottom: 15px;
+                        "></div>
+                        <div style="
+                            color: #666;
+                            font-size: 14px;
+                            text-align: center;
+                        ">
+                            <div style="font-weight: 500; margin-bottom: 4px;">Загружаем пункты выдачи...</div>
+                            <div style="font-size: 12px; opacity: 0.8;">Это может занять несколько секунд</div>
+                        </div>
+                    </div>
+                `);
+                mapContainer.css('position', 'relative').append(loader);
+                
+                // Добавляем CSS анимацию если её нет
+                if (!$('#pvz-loader-styles').length) {
+                    $('head').append(`
+                        <style id="pvz-loader-styles">
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                        </style>
+                    `);
+                }
+            }
+        }
+        
+        // Также показываем лоадер в счетчике пунктов
+        $('#cdek-points-count').html('🔄 Загружаем пункты выдачи...');
+    }
+    
+    function hidePvzLoader() {
+        $('#pvz-loader').remove();
+    }
+    
+    function showPvzError(message) {
+        $('#cdek-points-count').html('❌ ' + message);
+        setTimeout(() => {
+            $('#cdek-points-count').html('Выберите город для поиска пунктов выдачи');
+        }, 3000);
     }
     
     function updateOrderTotal(deliveryCost) {
@@ -1912,8 +2048,14 @@ jQuery(document).ready(function($) {
     const priceCheckInterval = window.innerWidth <= 768 ? 3000 : 2000;
     setInterval(() => fixExistingDuplicatedPrices(), priceCheckInterval);
     
-    console.log('🚀 СДЭК Delivery Fixed v2.0 загружен');
-    console.log('✅ Исправления: разделение коробок, CORS ошибки, производительность, дублированные цены');
+    // Сбрасываем предыдущие состояния поиска
+    window.lastSelectedCity = null;
+    window.lastSelectedPointCode = null;
+    window.currentSearchCity = null;
+    
+    console.log('🚀 СДЭК Delivery Fixed v2.1 загружен');
+    console.log('✅ Исправления: умный поиск, индикаторы загрузки, производительность');
+    console.log('🔍 Предотвращение повторных поисков');
     console.log('🏙️ Поддержка 1000+ городов России');
     console.log('📱 Оптимизировано для мобильных устройств');
 });
