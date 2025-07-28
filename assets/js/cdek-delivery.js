@@ -223,6 +223,7 @@ jQuery(document).ready(function($) {
         var maxLength = 0, maxWidth = 0, maxHeight = 0;
         var hasValidDimensions = false;
         var totalItems = 0;
+        var packagesCount = 1; // Количество коробок
         
         console.log('Получение данных корзины для расчета...');
         
@@ -583,16 +584,33 @@ jQuery(document).ready(function($) {
             // КРИТИЧЕСКИ ВАЖНО: Проверяем объем упаковки (лимит СДЭК = 300 см)
             var volume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
             if (volume > 300) {
-                console.log('⚠️ Объем упаковки превышает лимит СДЭК:', volume, 'см > 300 см. Корректируем размеры.');
+                console.log('⚠️ Объем упаковки превышает лимит СДЭК:', volume, 'см > 300 см. Разделяем на несколько коробок.');
                 
-                // Пропорционально уменьшаем все размеры, чтобы объем не превышал 300 см
-                var scaleFactor = 290 / volume; // 290 для небольшого запаса
-                dimensions.length = Math.ceil(dimensions.length * scaleFactor);
-                dimensions.width = Math.ceil(dimensions.width * scaleFactor);
-                dimensions.height = Math.ceil(dimensions.height * scaleFactor);
+                // Рассчитываем количество коробок
+                packagesCount = Math.ceil(volume / 290); // 290 для запаса
+                var itemsPerPackage = Math.ceil(totalItems / packagesCount);
+                
+                // Пересчитываем размеры для одной коробки
+                var volumePerPackage = totalVolume / packagesCount;
+                var volumeRatio = Math.pow(volumePerPackage / (maxLength * maxWidth * maxHeight), 1/3);
+                
+                dimensions = {
+                    length: Math.ceil(maxLength * Math.max(volumeRatio, 1) * 1.1),
+                    width: Math.ceil(maxWidth * Math.max(volumeRatio, 1) * 1.1),
+                    height: Math.ceil(maxHeight * Math.max(volumeRatio, 1) * 1.1)
+                };
+                
+                // Ограничиваем размерами
+                dimensions.length = Math.max(10, Math.min(dimensions.length, 150));
+                dimensions.width = Math.max(10, Math.min(dimensions.width, 150));
+                dimensions.height = Math.max(5, Math.min(dimensions.height, 150));
                 
                 var newVolume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
-                console.log('✅ Размеры скорректированы. Новый объем:', newVolume, 'см');
+                console.log('✅ Груз разделен на', packagesCount, 'коробок. Размер одной коробки:', dimensions);
+                console.log('✅ Объем одной коробки:', newVolume, 'см. Товаров в коробке:', itemsPerPackage);
+                
+                // Корректируем общий вес (вес одной коробки)
+                cartWeight = cartWeight / packagesCount;
             }
             
             console.log('Рассчитанные размеры упаковки:', dimensions);
@@ -632,14 +650,16 @@ jQuery(document).ready(function($) {
             weight: cartWeight,
             value: cartValue,
             dimensions: dimensions,
-            hasRealDimensions: hasValidDimensions
+            hasRealDimensions: hasValidDimensions,
+            packagesCount: packagesCount
         });
         
         return {
             weight: cartWeight,
             value: cartValue,
             dimensions: dimensions,
-            hasRealDimensions: hasValidDimensions
+            hasRealDimensions: hasValidDimensions,
+            packagesCount: packagesCount
         };
     }
     
@@ -676,6 +696,7 @@ jQuery(document).ready(function($) {
                 cart_dimensions: JSON.stringify(cartData.dimensions),
                 cart_value: cartData.value,
                 has_real_dimensions: cartData.hasRealDimensions ? 1 : 0,
+                packages_count: cartData.packagesCount || 1,
                 nonce: cdek_ajax.nonce || ''
             },
             success: function(response) {
@@ -683,6 +704,13 @@ jQuery(document).ready(function($) {
                 
                 if (response && response.success && response.data && response.data.delivery_sum) {
                     var deliveryCost = parseInt(response.data.delivery_sum);
+                    
+                    // Умножаем стоимость на количество коробок
+                    if (cartData.packagesCount > 1) {
+                        var costPerPackage = deliveryCost;
+                        deliveryCost = deliveryCost * cartData.packagesCount;
+                        console.log('📦 Стоимость пересчитана для', cartData.packagesCount, 'коробок:', costPerPackage, '×', cartData.packagesCount, '=', deliveryCost, 'руб.');
+                    }
                     
                     if (response.data.fallback) {
                         console.warn('⚠️ Используется резервный расчет:', deliveryCost, 'руб.');
@@ -756,6 +784,12 @@ jQuery(document).ready(function($) {
         
         if (cartData.value > 3000) {
             baseCost += Math.ceil((cartData.value - 3000) / 1000) * 20;
+        }
+        
+        // Умножаем на количество коробок
+        if (cartData.packagesCount > 1) {
+            baseCost = baseCost * cartData.packagesCount;
+            console.log('📦 Fallback стоимость пересчитана для', cartData.packagesCount, 'коробок:', baseCost, 'руб.');
         }
         
         return baseCost;
