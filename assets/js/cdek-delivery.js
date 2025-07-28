@@ -1245,9 +1245,93 @@ jQuery(document).ready(function($) {
             $('#cdek-selected-point-data').val(JSON.stringify(point));
         }
         
+        // Заполняем скрытые обязательные поля для прохождения валидации
+        populateHiddenAddressFields(point);
+        
         updateOrderSummary(point);
     }
     
+    function populateHiddenAddressFields(point) {
+        // Получаем данные из выбранного пункта
+        var city = '';
+        var state = '';
+        var postcode = '';
+        
+        if (point.location) {
+            city = point.location.city || '';
+            state = point.location.region || point.location.region_code || '';
+            postcode = point.location.postal_code || '';
+        }
+        
+        // Если нет данных в location, пытаемся получить из address
+        if (!city && point.address_comment) {
+            var match = point.address_comment.match(/г\.?\s*([А-Яа-яёЁ\-\s]+)/);
+            if (match) {
+                city = match[1].trim();
+            }
+        }
+        
+        // Устанавливаем значения по умолчанию, если данные не найдены
+        if (!city) city = 'Калининград'; // Значение по умолчанию из HTML
+        if (!state) state = 'Калининградская область';
+        if (!postcode) postcode = '236000';
+        
+        console.log('Заполняем скрытые поля адреса:', { city: city, state: state, postcode: postcode });
+        
+        // Находим и заполняем скрытые поля - используем более агрессивный поиск
+        var cityField = $('#shipping-city, input[name="shipping_city"], input[id*="shipping-city"], input[id*="city"]').filter('[name*="shipping"], [id*="shipping"]');
+        var stateField = $('#shipping-state, input[name="shipping_state"], input[id*="shipping-state"], input[id*="state"]').filter('[name*="shipping"], [id*="shipping"]');
+        var postcodeField = $('#shipping-postcode, input[name="shipping_postcode"], input[id*="shipping-postcode"], input[id*="postcode"]').filter('[name*="shipping"], [id*="shipping"]');
+        
+        if (cityField.length === 0) {
+            // Создаем поле, если оно не существует
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'shipping-city',
+                name: 'shipping_city',
+                value: city
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            cityField.val(city);
+        }
+        
+        if (stateField.length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'shipping-state',
+                name: 'shipping_state',
+                value: state
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            stateField.val(state);
+        }
+        
+        if (postcodeField.length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'shipping-postcode',
+                name: 'shipping_postcode',
+                value: postcode
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            postcodeField.val(postcode);
+        }
+        
+        // Отмечаем поля как валидные
+        cityField.removeClass('wc-invalid').addClass('wc-valid').attr('aria-invalid', 'false');
+        stateField.removeClass('wc-invalid').addClass('wc-valid').attr('aria-invalid', 'false');
+        postcodeField.removeClass('wc-invalid').addClass('wc-valid').attr('aria-invalid', 'false');
+        
+        // Скрываем сообщения об ошибках
+        $('.wc-block-components-validation-error').hide();
+        $('[id*="validate-error-shipping_city"]').hide();
+        $('[id*="validate-error-shipping-state"]').hide();
+        $('[id*="validate-error-shipping_postcode"]').hide();
+        
+        // Принудительно обновляем checkout
+        $(document.body).trigger('updated_checkout');
+    }
+
     function clearSelectedPoint() {
         selectedPoint = null;
         $('#cdek-selected-point').hide();
@@ -1256,6 +1340,11 @@ jQuery(document).ready(function($) {
         // Удаляем скрытые поля
         $('#cdek-selected-point-code').remove();
         $('#cdek-selected-point-data').remove();
+        
+        // Очищаем адресные поля
+        $('#shipping-city, input[name="shipping_city"]').val('');
+        $('#shipping-state, input[name="shipping_state"]').val('');
+        $('#shipping-postcode, input[name="shipping_postcode"]').val('');
         
         // Сбрасываем информацию о доставке
         resetCdekShippingToDefault();
@@ -1766,6 +1855,39 @@ jQuery(document).ready(function($) {
     
     // ====== ФУНКЦИИ ДЛЯ СКРЫТИЯ ПОЛЕЙ ======
     
+    function ensureAddressFieldsPopulated() {
+        // Проверяем, выбрана ли доставка СДЭК
+        var cdekSelected = $('input[value*="cdek_delivery"]:checked').length > 0;
+        
+        if (cdekSelected) {
+            // Ищем все возможные варианты полей адреса
+            var cityFields = $('#shipping-city, input[name="shipping_city"], input[id*="shipping-city"]');
+            var stateFields = $('#shipping-state, input[name="shipping_state"], input[id*="shipping-state"]');
+            var postcodeFields = $('#shipping-postcode, input[name="shipping_postcode"], input[id*="shipping-postcode"]');
+            
+            // Заполняем значениями по умолчанию, если поля пустые
+            cityFields.each(function() {
+                if (!$(this).val()) {
+                    $(this).val('Калининград').attr('aria-invalid', 'false');
+                }
+            });
+            
+            stateFields.each(function() {
+                if (!$(this).val()) {
+                    $(this).val('Калининградская область').attr('aria-invalid', 'false');
+                }
+            });
+            
+            postcodeFields.each(function() {
+                if (!$(this).val()) {
+                    $(this).val('236000').attr('aria-invalid', 'false');
+                }
+            });
+            
+            console.log('🔧 Принудительно заполнили адресные поля значениями по умолчанию');
+        }
+    }
+    
     function hideUnnecessaryFields() {
         // Скрываем поля города, области и индекса
         var fieldsToHide = [
@@ -1909,6 +2031,7 @@ jQuery(document).ready(function($) {
     
     setTimeout(function() {
         hideUnnecessaryFields(); // Еще раз скрываем поля
+        ensureAddressFieldsPopulated(); // Заполняем адресные поля
         
         if ($('#address-select').length === 0 && $('#address-suggestions').length === 0) {
             initAddressAutocomplete();
@@ -1917,6 +2040,7 @@ jQuery(document).ready(function($) {
     
     setTimeout(function() {
         hideUnnecessaryFields(); // Финальная проверка
+        ensureAddressFieldsPopulated(); // Финальная проверка адресных полей
         
         if ($('input[value*="cdek_delivery"]').length > 0 && $('#cdek-map-container').length === 0 && !isInitialized) {
             initCdekDelivery();
@@ -1935,8 +2059,17 @@ jQuery(document).ready(function($) {
             setTimeout(function() {
                 removeDuplicateTotalElements();
                 fixDuplicatedTotalValue();
+                ensureAddressFieldsPopulated(); // Также проверяем адресные поля
             }, 100);
         }
+    });
+    
+    // Обработчик изменения способа доставки
+    $(document).on('change', 'input[name*="shipping"], input[value*="cdek"]', function() {
+        setTimeout(function() {
+            ensureAddressFieldsPopulated();
+            hideUnnecessaryFields();
+        }, 100);
     });
     
     // Периодическая проверка и исправление дублированных значений каждые 1 секунду

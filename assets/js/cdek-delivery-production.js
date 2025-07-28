@@ -223,6 +223,7 @@ jQuery(document).ready(function($) {
         var maxLength = 0, maxWidth = 0, maxHeight = 0;
         var hasValidDimensions = false;
         var totalItems = 0;
+        var packagesCount = 1; // Количество коробок
         
         console.log('Получение данных корзины для расчета...');
         
@@ -583,16 +584,33 @@ jQuery(document).ready(function($) {
             // КРИТИЧЕСКИ ВАЖНО: Проверяем объем упаковки (лимит СДЭК = 300 см)
             var volume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
             if (volume > 300) {
-                console.log('⚠️ Объем упаковки превышает лимит СДЭК:', volume, 'см > 300 см. Корректируем размеры.');
+                console.log('⚠️ Объем упаковки превышает лимит СДЭК:', volume, 'см > 300 см. Разделяем на несколько коробок.');
                 
-                // Пропорционально уменьшаем все размеры, чтобы объем не превышал 300 см
-                var scaleFactor = 290 / volume; // 290 для небольшого запаса
-                dimensions.length = Math.ceil(dimensions.length * scaleFactor);
-                dimensions.width = Math.ceil(dimensions.width * scaleFactor);
-                dimensions.height = Math.ceil(dimensions.height * scaleFactor);
+                // Рассчитываем количество коробок
+                packagesCount = Math.ceil(volume / 290); // 290 для запаса
+                var itemsPerPackage = Math.ceil(totalItems / packagesCount);
+                
+                // Пересчитываем размеры для одной коробки
+                var volumePerPackage = totalVolume / packagesCount;
+                var volumeRatio = Math.pow(volumePerPackage / (maxLength * maxWidth * maxHeight), 1/3);
+                
+                dimensions = {
+                    length: Math.ceil(maxLength * Math.max(volumeRatio, 1) * 1.1),
+                    width: Math.ceil(maxWidth * Math.max(volumeRatio, 1) * 1.1),
+                    height: Math.ceil(maxHeight * Math.max(volumeRatio, 1) * 1.1)
+                };
+                
+                // Ограничиваем размерами
+                dimensions.length = Math.max(10, Math.min(dimensions.length, 150));
+                dimensions.width = Math.max(10, Math.min(dimensions.width, 150));
+                dimensions.height = Math.max(5, Math.min(dimensions.height, 150));
                 
                 var newVolume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
-                console.log('✅ Размеры скорректированы. Новый объем:', newVolume, 'см');
+                console.log('✅ Груз разделен на', packagesCount, 'коробок. Размер одной коробки:', dimensions);
+                console.log('✅ Объем одной коробки:', newVolume, 'см. Товаров в коробке:', itemsPerPackage);
+                
+                // Корректируем общий вес (вес одной коробки)
+                cartWeight = cartWeight / packagesCount;
             }
             
             console.log('Рассчитанные размеры упаковки:', dimensions);
@@ -632,14 +650,16 @@ jQuery(document).ready(function($) {
             weight: cartWeight,
             value: cartValue,
             dimensions: dimensions,
-            hasRealDimensions: hasValidDimensions
+            hasRealDimensions: hasValidDimensions,
+            packagesCount: packagesCount
         });
         
         return {
             weight: cartWeight,
             value: cartValue,
             dimensions: dimensions,
-            hasRealDimensions: hasValidDimensions
+            hasRealDimensions: hasValidDimensions,
+            packagesCount: packagesCount
         };
     }
     
@@ -676,6 +696,7 @@ jQuery(document).ready(function($) {
                 cart_dimensions: JSON.stringify(cartData.dimensions),
                 cart_value: cartData.value,
                 has_real_dimensions: cartData.hasRealDimensions ? 1 : 0,
+                packages_count: cartData.packagesCount || 1,
                 nonce: cdek_ajax.nonce || ''
             },
             success: function(response) {
@@ -683,6 +704,13 @@ jQuery(document).ready(function($) {
                 
                 if (response && response.success && response.data && response.data.delivery_sum) {
                     var deliveryCost = parseInt(response.data.delivery_sum);
+                    
+                    // Умножаем стоимость на количество коробок
+                    if (cartData.packagesCount > 1) {
+                        var costPerPackage = deliveryCost;
+                        deliveryCost = deliveryCost * cartData.packagesCount;
+                        console.log('📦 Стоимость пересчитана для', cartData.packagesCount, 'коробок:', costPerPackage, '×', cartData.packagesCount, '=', deliveryCost, 'руб.');
+                    }
                     
                     if (response.data.fallback) {
                         console.warn('⚠️ Используется резервный расчет:', deliveryCost, 'руб.');
@@ -756,6 +784,12 @@ jQuery(document).ready(function($) {
         
         if (cartData.value > 3000) {
             baseCost += Math.ceil((cartData.value - 3000) / 1000) * 20;
+        }
+        
+        // Умножаем на количество коробок
+        if (cartData.packagesCount > 1) {
+            baseCost = baseCost * cartData.packagesCount;
+            console.log('📦 Fallback стоимость пересчитана для', cartData.packagesCount, 'коробок:', baseCost, 'руб.');
         }
         
         return baseCost;
@@ -1211,9 +1245,93 @@ jQuery(document).ready(function($) {
             $('#cdek-selected-point-data').val(JSON.stringify(point));
         }
         
+        // Заполняем скрытые обязательные поля для прохождения валидации
+        populateHiddenAddressFields(point);
+        
         updateOrderSummary(point);
     }
     
+    function populateHiddenAddressFields(point) {
+        // Получаем данные из выбранного пункта
+        var city = '';
+        var state = '';
+        var postcode = '';
+        
+        if (point.location) {
+            city = point.location.city || '';
+            state = point.location.region || point.location.region_code || '';
+            postcode = point.location.postal_code || '';
+        }
+        
+        // Если нет данных в location, пытаемся получить из address
+        if (!city && point.address_comment) {
+            var match = point.address_comment.match(/г\.?\s*([А-Яа-яёЁ\-\s]+)/);
+            if (match) {
+                city = match[1].trim();
+            }
+        }
+        
+        // Устанавливаем значения по умолчанию, если данные не найдены
+        if (!city) city = 'Калининград'; // Значение по умолчанию из HTML
+        if (!state) state = 'Калининградская область';
+        if (!postcode) postcode = '236000';
+        
+        console.log('Заполняем скрытые поля адреса:', { city: city, state: state, postcode: postcode });
+        
+        // Находим и заполняем скрытые поля - используем более агрессивный поиск
+        var cityField = $('#shipping-city, input[name="shipping_city"], input[id*="shipping-city"], input[id*="city"]').filter('[name*="shipping"], [id*="shipping"]');
+        var stateField = $('#shipping-state, input[name="shipping_state"], input[id*="shipping-state"], input[id*="state"]').filter('[name*="shipping"], [id*="shipping"]');
+        var postcodeField = $('#shipping-postcode, input[name="shipping_postcode"], input[id*="shipping-postcode"], input[id*="postcode"]').filter('[name*="shipping"], [id*="shipping"]');
+        
+        if (cityField.length === 0) {
+            // Создаем поле, если оно не существует
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'shipping-city',
+                name: 'shipping_city',
+                value: city
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            cityField.val(city);
+        }
+        
+        if (stateField.length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'shipping-state',
+                name: 'shipping_state',
+                value: state
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            stateField.val(state);
+        }
+        
+        if (postcodeField.length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'shipping-postcode',
+                name: 'shipping_postcode',
+                value: postcode
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            postcodeField.val(postcode);
+        }
+        
+        // Отмечаем поля как валидные
+        cityField.removeClass('wc-invalid').addClass('wc-valid').attr('aria-invalid', 'false');
+        stateField.removeClass('wc-invalid').addClass('wc-valid').attr('aria-invalid', 'false');
+        postcodeField.removeClass('wc-invalid').addClass('wc-valid').attr('aria-invalid', 'false');
+        
+        // Скрываем сообщения об ошибках
+        $('.wc-block-components-validation-error').hide();
+        $('[id*="validate-error-shipping_city"]').hide();
+        $('[id*="validate-error-shipping-state"]').hide();
+        $('[id*="validate-error-shipping_postcode"]').hide();
+        
+        // Принудительно обновляем checkout
+        $(document.body).trigger('updated_checkout');
+    }
+
     function clearSelectedPoint() {
         selectedPoint = null;
         $('#cdek-selected-point').hide();
@@ -1222,6 +1340,11 @@ jQuery(document).ready(function($) {
         // Удаляем скрытые поля
         $('#cdek-selected-point-code').remove();
         $('#cdek-selected-point-data').remove();
+        
+        // Очищаем адресные поля
+        $('#shipping-city, input[name="shipping_city"]').val('');
+        $('#shipping-state, input[name="shipping_state"]').val('');
+        $('#shipping-postcode, input[name="shipping_postcode"]').val('');
         
         // Сбрасываем информацию о доставке
         resetCdekShippingToDefault();
@@ -1732,6 +1855,39 @@ jQuery(document).ready(function($) {
     
     // ====== ФУНКЦИИ ДЛЯ СКРЫТИЯ ПОЛЕЙ ======
     
+    function ensureAddressFieldsPopulated() {
+        // Проверяем, выбрана ли доставка СДЭК
+        var cdekSelected = $('input[value*="cdek_delivery"]:checked').length > 0;
+        
+        if (cdekSelected) {
+            // Ищем все возможные варианты полей адреса
+            var cityFields = $('#shipping-city, input[name="shipping_city"], input[id*="shipping-city"]');
+            var stateFields = $('#shipping-state, input[name="shipping_state"], input[id*="shipping-state"]');
+            var postcodeFields = $('#shipping-postcode, input[name="shipping_postcode"], input[id*="shipping-postcode"]');
+            
+            // Заполняем значениями по умолчанию, если поля пустые
+            cityFields.each(function() {
+                if (!$(this).val()) {
+                    $(this).val('Калининград').attr('aria-invalid', 'false');
+                }
+            });
+            
+            stateFields.each(function() {
+                if (!$(this).val()) {
+                    $(this).val('Калининградская область').attr('aria-invalid', 'false');
+                }
+            });
+            
+            postcodeFields.each(function() {
+                if (!$(this).val()) {
+                    $(this).val('236000').attr('aria-invalid', 'false');
+                }
+            });
+            
+            console.log('🔧 Принудительно заполнили адресные поля значениями по умолчанию');
+        }
+    }
+    
     function hideUnnecessaryFields() {
         // Скрываем поля города, области и индекса
         var fieldsToHide = [
@@ -1875,6 +2031,7 @@ jQuery(document).ready(function($) {
     
     setTimeout(function() {
         hideUnnecessaryFields(); // Еще раз скрываем поля
+        ensureAddressFieldsPopulated(); // Заполняем адресные поля
         
         if ($('#address-select').length === 0 && $('#address-suggestions').length === 0) {
             initAddressAutocomplete();
@@ -1883,6 +2040,7 @@ jQuery(document).ready(function($) {
     
     setTimeout(function() {
         hideUnnecessaryFields(); // Финальная проверка
+        ensureAddressFieldsPopulated(); // Финальная проверка адресных полей
         
         if ($('input[value*="cdek_delivery"]').length > 0 && $('#cdek-map-container').length === 0 && !isInitialized) {
             initCdekDelivery();
@@ -1901,8 +2059,17 @@ jQuery(document).ready(function($) {
             setTimeout(function() {
                 removeDuplicateTotalElements();
                 fixDuplicatedTotalValue();
+                ensureAddressFieldsPopulated(); // Также проверяем адресные поля
             }, 100);
         }
+    });
+    
+    // Обработчик изменения способа доставки
+    $(document).on('change', 'input[name*="shipping"], input[value*="cdek"]', function() {
+        setTimeout(function() {
+            ensureAddressFieldsPopulated();
+            hideUnnecessaryFields();
+        }, 100);
     });
     
     // Периодическая проверка и исправление дублированных значений каждые 1 секунду

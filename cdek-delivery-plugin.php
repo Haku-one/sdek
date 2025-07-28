@@ -75,6 +75,10 @@ class CdekDeliveryPlugin {
         
         // Добавляем габариты в описание товара в корзине
         add_filter('woocommerce_get_item_data', array($this, 'add_dimensions_to_cart_item'), 10, 2);
+        
+        // Обход валидации для заказов СДЭК
+        add_action('woocommerce_checkout_process', array($this, 'bypass_cdek_validation'));
+        add_action('woocommerce_checkout_create_order', array($this, 'populate_cdek_address_data'));
     }
     
     public function init() {
@@ -96,15 +100,73 @@ class CdekDeliveryPlugin {
     }
     
     public function customize_checkout_fields($fields) {
-        // Убираем ненужные поля для доставки
-        unset($fields['shipping']['shipping_city']);
-        unset($fields['shipping']['shipping_state']);
-        unset($fields['shipping']['shipping_postcode']);
+        // Вместо удаления полей делаем их скрытыми и автозаполняемыми
+        if (isset($fields['shipping']['shipping_city'])) {
+            $fields['shipping']['shipping_city']['required'] = false;
+            $fields['shipping']['shipping_city']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['shipping']['shipping_city']['input_class'] = array('cdek-auto-filled');
+            $fields['shipping']['shipping_city']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['shipping']['shipping_city']['default'] = 'Калининград';
+        }
         
-        // Убираем поля для биллинга тоже
-        unset($fields['billing']['billing_city']);
-        unset($fields['billing']['billing_state']);
-        unset($fields['billing']['billing_postcode']);
+        if (isset($fields['shipping']['shipping_state'])) {
+            $fields['shipping']['shipping_state']['required'] = false;
+            $fields['shipping']['shipping_state']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['shipping']['shipping_state']['input_class'] = array('cdek-auto-filled');
+            $fields['shipping']['shipping_state']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['shipping']['shipping_state']['default'] = 'Калининградская область';
+        }
+        
+        if (isset($fields['shipping']['shipping_postcode'])) {
+            $fields['shipping']['shipping_postcode']['required'] = false;
+            $fields['shipping']['shipping_postcode']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['shipping']['shipping_postcode']['input_class'] = array('cdek-auto-filled');
+            $fields['shipping']['shipping_postcode']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['shipping']['shipping_postcode']['default'] = '236000';
+        }
+        
+        // Аналогично для billing полей
+        if (isset($fields['billing']['billing_city'])) {
+            $fields['billing']['billing_city']['required'] = false;
+            $fields['billing']['billing_city']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['billing']['billing_city']['input_class'] = array('cdek-auto-filled');
+            $fields['billing']['billing_city']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['billing']['billing_city']['default'] = 'Калининград';
+        }
+        
+        if (isset($fields['billing']['billing_state'])) {
+            $fields['billing']['billing_state']['required'] = false;
+            $fields['billing']['billing_state']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['billing']['billing_state']['input_class'] = array('cdek-auto-filled');
+            $fields['billing']['billing_state']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['billing']['billing_state']['default'] = 'Калининградская область';
+        }
+        
+        if (isset($fields['billing']['billing_postcode'])) {
+            $fields['billing']['billing_postcode']['required'] = false;
+            $fields['billing']['billing_postcode']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['billing']['billing_postcode']['input_class'] = array('cdek-auto-filled');
+            $fields['billing']['billing_postcode']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['billing']['billing_postcode']['default'] = '236000';
+        }
         
         // Меняем метку для поля адреса
         $fields['shipping']['shipping_address_1']['label'] = 'Город доставки';
@@ -115,10 +177,39 @@ class CdekDeliveryPlugin {
     }
     
     public function customize_address_fields($fields) {
-        // Убираем ненужные поля из формы адреса
-        unset($fields['city']);
-        unset($fields['state']);
-        unset($fields['postcode']);
+        // Вместо удаления полей делаем их скрытыми и автозаполняемыми
+        if (isset($fields['city'])) {
+            $fields['city']['required'] = false;
+            $fields['city']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['city']['input_class'] = array('cdek-auto-filled');
+            $fields['city']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['city']['default'] = 'Калининград';
+        }
+        
+        if (isset($fields['state'])) {
+            $fields['state']['required'] = false;
+            $fields['state']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['state']['input_class'] = array('cdek-auto-filled');
+            $fields['state']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['state']['default'] = 'Калининградская область';
+        }
+        
+        if (isset($fields['postcode'])) {
+            $fields['postcode']['required'] = false;
+            $fields['postcode']['class'] = array('form-row-wide', 'cdek-hidden-field');
+            $fields['postcode']['input_class'] = array('cdek-auto-filled');
+            $fields['postcode']['custom_attributes'] = array(
+                'style' => 'display: none !important;',
+                'data-cdek-auto' => 'true'
+            );
+            $fields['postcode']['default'] = '236000';
+        }
         
         // Настраиваем поле адреса
         $fields['address_1']['label'] = 'Город доставки';
@@ -420,7 +511,8 @@ class CdekDeliveryPlugin {
                 #billing-postcode,
                 .wc-block-components-text-input:has(#shipping-city),
                 .wc-block-components-text-input:has(#shipping-state),
-                .wc-block-components-text-input:has(#shipping-postcode) {
+                .wc-block-components-text-input:has(#shipping-postcode),
+                .cdek-hidden-field {
                     display: none !important;
                     visibility: hidden !important;
                     height: 0 !important;
@@ -433,6 +525,25 @@ class CdekDeliveryPlugin {
                 [class*="city"]:not([class*="address"]),
                 [class*="state"]:not([class*="address"]),
                 [class*="postcode"]:not([class*="address"]) {
+                    display: none !important;
+                }
+                
+                /* Скрываем ошибки валидации для скрытых полей СДЭК */
+                .wc-block-components-address-form__city.has-error,
+                .wc-block-components-address-form__state.has-error,
+                .wc-block-components-address-form__postcode.has-error,
+                [id*="validate-error-shipping_city"],
+                [id*="validate-error-shipping-state"],
+                [id*="validate-error-shipping_postcode"],
+                .wc-block-components-validation-error:has([id*="shipping_city"]),
+                .wc-block-components-validation-error:has([id*="shipping-state"]),
+                .wc-block-components-validation-error:has([id*="shipping_postcode"]) {
+                    display: none !important;
+                }
+                
+                /* Принудительно скрываем все ошибки для полей СДЭК */
+                .wc-block-components-text-input.has-error:has(input[data-cdek-auto]),
+                .wc-block-components-validation-error[role="alert"] p[id*="validate-error-shipping"] {
                     display: none !important;
                 }
             </style>';
@@ -513,6 +624,88 @@ class CdekDeliveryPlugin {
         if (class_exists('Automattic\WooCommerce\Blocks\Integrations\IntegrationInterface')) {
             include_once plugin_dir_path(__FILE__) . 'includes/class-wc-blocks-integration.php';
         }
+    }
+
+    public function bypass_cdek_validation() {
+        // Проверяем, является ли текущий заказ заказом СДЭК
+        $is_cdek_order = false;
+        
+        // Проверяем через shipping_method
+        if (isset($_POST['shipping_method']) && strpos($_POST['shipping_method'], 'cdek_delivery') !== false) {
+            $is_cdek_order = true;
+        }
+        
+        // Проверяем через наличие данных СДЭК
+        if (isset($_POST['cdek_selected_point_code']) && !empty($_POST['cdek_selected_point_code'])) {
+            $is_cdek_order = true;
+        }
+        
+        if ($is_cdek_order) {
+            // Заполняем отсутствующие поля данными из выбранного пункта
+            if (isset($_POST['cdek_selected_point_data']) && !empty($_POST['cdek_selected_point_data'])) {
+                $point_data = json_decode(stripslashes($_POST['cdek_selected_point_data']), true);
+                
+                if ($point_data && isset($point_data['location'])) {
+                    // Заполняем shipping поля
+                    if (empty($_POST['shipping_city'])) {
+                        $_POST['shipping_city'] = $point_data['location']['city'] ?? 'Калининград';
+                    }
+                    if (empty($_POST['shipping_state'])) {
+                        $_POST['shipping_state'] = $point_data['location']['region'] ?? 'Калининградская область';
+                    }
+                    if (empty($_POST['shipping_postcode'])) {
+                        $_POST['shipping_postcode'] = $point_data['location']['postal_code'] ?? '236000';
+                    }
+                    
+                    // Заполняем billing поля, если используется тот же адрес
+                    if (isset($_POST['ship_to_different_address']) && empty($_POST['ship_to_different_address'])) {
+                        if (empty($_POST['billing_city'])) {
+                            $_POST['billing_city'] = $_POST['shipping_city'];
+                        }
+                        if (empty($_POST['billing_state'])) {
+                            $_POST['billing_state'] = $_POST['shipping_state'];
+                        }
+                        if (empty($_POST['billing_postcode'])) {
+                            $_POST['billing_postcode'] = $_POST['shipping_postcode'];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public function populate_cdek_address_data($order) {
+        // Получаем данные о выбранном пункте выдачи из метаданных заказа
+        $point_code = get_post_meta($order->get_id(), '_cdek_point_code', true);
+        $point_data = get_post_meta($order->get_id(), '_cdek_point_data', true);
+
+        if ($point_code && $point_data) {
+            // Заполняем поля адреса в заказе
+            $order->set_shipping_city($point_data['location']['city']);
+            $order->set_shipping_state($point_data['location']['region']);
+            $order->set_shipping_postcode($point_data['location']['postal_code']);
+            $order->set_shipping_address_1($point_data['location']['address_full']);
+            $order->set_shipping_country('RU'); // Устанавливаем страну
+
+            // Сохраняем данные о пункте выдачи в метаданные заказа
+            update_post_meta($order->get_id(), '_cdek_point_code', $point_code);
+            update_post_meta($order->get_id(), '_cdek_point_data', $point_data);
+        }
+    }
+
+    public function bypass_field_validation($field, $key, $args, $value) {
+        // Отключаем валидацию для полей города, области и индекса
+        if (in_array($key, array('shipping_city', 'shipping_state', 'shipping_postcode'))) {
+            return array(
+                'class' => array('form-row-wide'),
+                'input_class' => array('woocommerce-validated'),
+                'custom_attributes' => array(
+                    'data-required' => 'false',
+                    'data-invalid' => 'false'
+                )
+            );
+        }
+        return $field;
     }
 }
 
