@@ -96,46 +96,24 @@ class CdekDeliveryPlugin {
     }
     
     public function customize_checkout_fields($fields) {
-        // Убираем ненужные поля для доставки
-        unset($fields['shipping']['shipping_city']);
-        unset($fields['shipping']['shipping_state']);
-        unset($fields['shipping']['shipping_postcode']);
-        
-        // Убираем поля для биллинга тоже
-        unset($fields['billing']['billing_city']);
-        unset($fields['billing']['billing_state']);
-        unset($fields['billing']['billing_postcode']);
-        
-        // Меняем метку для поля адреса
-        $fields['shipping']['shipping_address_1']['label'] = 'Город доставки';
-        $fields['shipping']['shipping_address_1']['placeholder'] = 'Например: Москва';
-        $fields['shipping']['shipping_address_1']['required'] = true;
-        
+        // Упрощаем поля адреса для СДЭК
         return $fields;
     }
     
     public function customize_address_fields($fields) {
-        // Убираем ненужные поля из формы адреса
-        unset($fields['city']);
-        unset($fields['state']);
-        unset($fields['postcode']);
-        
-        // Настраиваем поле адреса
-        $fields['address_1']['label'] = 'Город доставки';
-        $fields['address_1']['placeholder'] = 'Например: Москва';
-        $fields['address_1']['required'] = true;
-        
+        // Настройка полей адреса
         return $fields;
     }
     
     public function init_cdek_shipping() {
-        if (!class_exists('WC_Cdek_Shipping_Method')) {
+        // Инициализация метода доставки СДЭК
+        if (!class_exists('WC_CDEK_Shipping_Method')) {
             include_once plugin_dir_path(__FILE__) . 'includes/class-wc-cdek-shipping-method.php';
         }
     }
     
     public function add_cdek_shipping_method($methods) {
-        $methods['cdek_delivery'] = 'WC_Cdek_Shipping_Method';
+        $methods['cdek'] = 'WC_CDEK_Shipping_Method';
         return $methods;
     }
     
@@ -146,20 +124,15 @@ class CdekDeliveryPlugin {
         
         $address = sanitize_text_field($_POST['address']);
         
-        // Добавляем отладочную информацию
-        error_log('СДЭК AJAX: Запрос пунктов для адреса: ' . $address);
-        
         $cdek_api = new CdekAPI();
         $points = $cdek_api->get_delivery_points($address);
         
-        // Логируем результат
-        error_log('СДЭК AJAX: Получено пунктов: ' . count($points));
-        if (!empty($points)) {
-            error_log('СДЭК AJAX: Первый пункт: ' . print_r($points[0], true));
-        }
-        
         wp_send_json_success($points);
     }
+    
+
+    
+
     
     public function ajax_calculate_delivery_cost() {
         if (!wp_verify_nonce($_POST['nonce'], 'cdek_nonce')) {

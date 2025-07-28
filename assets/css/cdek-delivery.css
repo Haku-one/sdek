@@ -1,311 +1,62 @@
-/* Стили для плагина СДЭК Доставка */
+/* СДЭК Доставка - Стили */
 
-#cdek-map-container {
-    margin: 20px 0;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 20px;
-    background: #ffffff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-#cdek-map-container h4 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    color: #333;
-    font-size: 18px;
-    font-weight: 600;
-}
-
-#cdek-points-info {
-    background: #e3f2fd;
-    border: 1px solid #2196f3;
-    border-radius: 4px;
-    padding: 12px;
-    margin-bottom: 15px;
-}
-
-#cdek-points-info strong {
-    color: #1976d2;
-}
-
-#cdek-points-count {
-    margin-top: 5px;
-    color: #333;
-    font-size: 14px;
-}
-
-#cdek-selected-point {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 12px;
-    margin-bottom: 15px;
-    display: none;
-}
-
-#cdek-selected-point strong {
-    color: #28a745;
-}
-
-#cdek-point-info {
-    margin-top: 8px;
-    font-size: 14px;
-    line-height: 1.4;
-}
-
-#cdek-map {
-    width: 100%;
-    height: 450px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    background: #f5f5f5;
-}
-
-/* Стили для автокомплита адресов */
-#address-suggestions {
-    position: absolute;
-    background: white;
-    border: 1px solid #ccc;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 1000;
-    display: none;
-    width: 100%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    border-radius: 4px;
-}
-
-.suggestion-item {
-    padding: 8px 12px;
-    cursor: pointer;
-    border-bottom: 1px solid #eee;
-    transition: background-color 0.2s;
-}
-
-.suggestion-item:hover {
-    background-color: #f0f0f0;
-}
-
-.suggestion-item:last-child {
-    border-bottom: none;
-}
-
-/* Стили для блока габаритов товаров */
-#product-dimensions-info {
+.cdek-delivery-wrapper {
     margin: 20px 0;
     padding: 15px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    border: 1px solid #ddd;
     border-radius: 4px;
+    background: #f9f9f9;
 }
 
-#product-dimensions-info h4 {
-    margin-top: 0;
-    margin-bottom: 12px;
-    color: #333;
-    font-size: 16px;
-    font-weight: 600;
+.cdek-points-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 10px 0;
 }
 
-.dimensions-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.product-dimensions {
-    padding: 8px;
-    background: white;
+.cdek-point-item {
+    padding: 10px;
     border: 1px solid #e0e0e0;
+    margin-bottom: 5px;
+    cursor: pointer;
+    border-radius: 3px;
+    background: white;
+}
+
+.cdek-point-item:hover {
+    background: #f0f8ff;
+    border-color: #0073aa;
+}
+
+.cdek-point-item.selected {
+    background: #e1f5fe;
+    border-color: #0073aa;
+}
+
+.cdek-map-container {
+    height: 400px;
+    width: 100%;
+    margin: 10px 0;
+}
+
+.cdek-loading {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+.cdek-error {
+    color: #d63638;
+    padding: 10px;
+    background: #fcf2f2;
+    border: 1px solid #d63638;
     border-radius: 3px;
 }
 
-.product-dimensions strong {
-    color: #333;
-    font-size: 14px;
-}
-
-.product-dimensions span {
-    color: #666;
-    font-size: 13px;
-    display: block;
-    margin-top: 4px;
-}
-
-/* Скрытие стандартных блоков СДЭК */
-.wc-block-components-radio-control input[value*="cdek_delivery"] {
-    display: none !important;
-    visibility: hidden !important;
-    position: absolute !important;
-    left: -9999px !important;
-}
-
-.wc-block-components-radio-control input[value*="cdek_delivery"] + label {
-    display: none !important;
-}
-
-/* Скрытие полей города, области и индекса */
-.wc-block-components-address-form__city,
-.wc-block-components-address-form__state,
-.wc-block-components-address-form__postcode,
-#shipping-city,
-#shipping-state,
-#shipping-postcode,
-#billing-city,
-#billing-state,
-#billing-postcode {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-/* Скрытие контейнеров с полями города, области и индекса */
-.wc-block-components-text-input:has(#shipping-city),
-.wc-block-components-text-input:has(#shipping-state),
-.wc-block-components-text-input:has(#shipping-postcode),
-.wc-block-components-text-input:has(#billing-city),
-.wc-block-components-text-input:has(#billing-state),
-.wc-block-components-text-input:has(#billing-postcode) {
-    display: none !important;
-}
-
-/* Альтернативные селекторы для скрытия */
-[class*="city"]:not([class*="address"]):not([class*="block"]),
-[class*="state"]:not([class*="address"]):not([class*="block"]),
-[class*="postcode"]:not([class*="address"]):not([class*="block"]) {
-    display: none !important;
-}
-
-/* Адаптивность для мобильных устройств */
-@media (max-width: 768px) {
-    #cdek-map-container {
-        margin: 15px 0;
-        padding: 15px;
-    }
-    
-    #cdek-map {
-        height: 350px;
-    }
-    
-    #cdek-map-container h4 {
-        font-size: 16px;
-    }
-    
-    .product-dimensions {
-        padding: 6px;
-    }
-    
-    .product-dimensions strong {
-        font-size: 13px;
-    }
-    
-    .product-dimensions span {
-        font-size: 12px;
-    }
-}
-
-@media (max-width: 480px) {
-    #cdek-map-container {
-        padding: 10px;
-    }
-    
-    #cdek-map {
-        height: 300px;
-    }
-    
-    #cdek-points-info,
-    #cdek-selected-point {
-        padding: 10px;
-    }
-    
-    .suggestion-item {
-        padding: 6px 10px;
-        font-size: 14px;
-    }
-}
-
-/* Анимации */
-#cdek-map-container {
-    animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-#cdek-selected-point {
-    animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        max-height: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-    }
-    to {
-        opacity: 1;
-        max-height: 200px;
-        padding-top: 12px;
-        padding-bottom: 12px;
-    }
-}
-
-/* Стили для индикатора загрузки */
-.cdek-loading {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #2196f3;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 5px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Стили для Яндекс.Карт */
-.ymaps-2-1-79-balloon__content {
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.ymaps-2-1-79-balloon__content strong {
-    color: #333;
-}
-
-/* Улучшения для WooCommerce блоков */
-.wc-block-components-totals-item__description small {
-    color: #666 !important;
-    font-size: 12px !important;
-}
-
-/* Стили для админки */
-.cdek-point-info {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 15px;
-    margin-top: 20px;
-}
-
-.cdek-point-info h4 {
-    margin-top: 0;
-    color: #333;
+.cdek-success {
+    color: #00a32a;  
+    padding: 10px;
+    background: #f0f6fc;
+    border: 1px solid #00a32a;
+    border-radius: 3px;
 }
