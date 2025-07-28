@@ -1491,6 +1491,9 @@ jQuery(document).ready(function($) {
         
         updateOrderSummary(point);
         
+        // Уведомляем о выборе пункта СДЭК для скрытия полей биллинга
+        $(document).trigger('cdek_point_selected', [point]);
+        
         console.log('✅ Выбран ПВЗ:', point.name, '(код:', point.code + ')');
     }
     
