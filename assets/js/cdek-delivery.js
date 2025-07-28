@@ -580,6 +580,21 @@ jQuery(document).ready(function($) {
             dimensions.width = Math.max(10, Math.min(dimensions.width, 150));
             dimensions.height = Math.max(5, Math.min(dimensions.height, 150));
             
+            // КРИТИЧЕСКИ ВАЖНО: Проверяем объем упаковки (лимит СДЭК = 300 см)
+            var volume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
+            if (volume > 300) {
+                console.log('⚠️ Объем упаковки превышает лимит СДЭК:', volume, 'см > 300 см. Корректируем размеры.');
+                
+                // Пропорционально уменьшаем все размеры, чтобы объем не превышал 300 см
+                var scaleFactor = 290 / volume; // 290 для небольшого запаса
+                dimensions.length = Math.ceil(dimensions.length * scaleFactor);
+                dimensions.width = Math.ceil(dimensions.width * scaleFactor);
+                dimensions.height = Math.ceil(dimensions.height * scaleFactor);
+                
+                var newVolume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
+                console.log('✅ Размеры скорректированы. Новый объем:', newVolume, 'см');
+            }
+            
             console.log('Рассчитанные размеры упаковки:', dimensions);
         } else {
             console.log('Используем размеры по умолчанию (нет реальных габаритов)');
