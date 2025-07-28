@@ -131,11 +131,31 @@ class PriceFormatter {
         
         const mainNumber = numbers[0];
         
+        // НЕ исправляем валидные итоговые суммы (135000 + 6984 = 141984)
+        // Проверяем, является ли это валидной суммой заказа
+        const numValue = parseInt(mainNumber);
+        if (numValue >= 100000 && numValue <= 999999) {
+            // Это может быть валидная итоговая сумма заказа, не трогаем
+            return priceText;
+        }
+        
         if (mainNumber.length >= 6) {
             const patterns = [
-                { prefixLen: 3, check: (prefix, suffix) => parseInt(prefix) < parseInt(suffix) && parseInt(prefix) >= 100 },
-                { prefixLen: 4, check: (prefix, suffix) => parseInt(prefix) < parseInt(suffix) && parseInt(prefix) >= 1000 },
-                { prefixLen: Math.floor(mainNumber.length / 2), check: (prefix, suffix) => prefix === suffix }
+                // Паттерн полного дублирования: ABCABC -> ABC (например: 180180 -> 180)
+                { 
+                    prefixLen: Math.floor(mainNumber.length / 2), 
+                    check: (prefix, suffix) => prefix === suffix && prefix.length >= 2
+                },
+                // Паттерн склеивания: ABC + DEFGH = ABCDEFGH, но только если ABC намного меньше DEFGH
+                { 
+                    prefixLen: 3, 
+                    check: (prefix, suffix) => {
+                        const prefixNum = parseInt(prefix);
+                        const suffixNum = parseInt(suffix);
+                        // Исправляем только если префикс в 10+ раз меньше суффикса
+                        return prefixNum > 0 && suffixNum > 0 && (suffixNum / prefixNum) >= 10;
+                    }
+                }
             ];
             
             for (const pattern of patterns) {
@@ -359,7 +379,14 @@ jQuery(document).ready(function($) {
                 if (arguments.length > 0 && typeof value === 'string') {
                     if (this.hasClass('wc-block-components-totals-item__value') || 
                         this.hasClass('wc-block-formatted-money-amount')) {
-                        value = PriceFormatter.fixDuplicatedPrice(value);
+                        
+                        // Проверяем, не является ли это итоговой суммой
+                        var isTotal = this.closest('.wc-block-components-totals-footer-item').length > 0 ||
+                                     this.siblings('.wc-block-components-totals-item__label').text().indexOf('Итого') !== -1;
+                        
+                        if (!isTotal) {
+                            value = PriceFormatter.fixDuplicatedPrice(value);
+                        }
                     }
                 }
                 return originalText.apply(this, arguments.length > 0 ? [value] : []);
@@ -376,7 +403,15 @@ jQuery(document).ready(function($) {
                         if (typeof value === 'string' && 
                             (this.classList.contains('wc-block-components-totals-item__value') ||
                              this.classList.contains('wc-block-formatted-money-amount'))) {
-                            value = PriceFormatter.fixDuplicatedPrice(value);
+                            
+                            // Проверяем, не является ли это итоговой суммой
+                            var isTotal = this.closest('.wc-block-components-totals-footer-item') ||
+                                         (this.parentElement && this.parentElement.querySelector('.wc-block-components-totals-item__label') &&
+                                          this.parentElement.querySelector('.wc-block-components-totals-item__label').textContent.indexOf('Итого') !== -1);
+                            
+                            if (!isTotal) {
+                                value = PriceFormatter.fixDuplicatedPrice(value);
+                            }
                         }
                         originalTextContentDescriptor.set.call(this, value);
                     },
@@ -390,12 +425,19 @@ jQuery(document).ready(function($) {
         domBatcher.add(() => {
             $('.wc-block-components-totals-item__value, .wc-block-formatted-money-amount').each(function() {
                 const $element = $(this);
-                const currentText = $element.text().trim();
-                const fixedText = PriceFormatter.fixDuplicatedPrice(currentText);
                 
-                if (currentText !== fixedText) {
-                    console.log(`🔧 Исправляем цену: ${currentText} -> ${fixedText}`);
-                    $element.text(fixedText);
+                // Проверяем, не является ли это итоговой суммой
+                const isTotal = $element.closest('.wc-block-components-totals-footer-item').length > 0 ||
+                               $element.siblings('.wc-block-components-totals-item__label').text().indexOf('Итого') !== -1;
+                
+                if (!isTotal) {
+                    const currentText = $element.text().trim();
+                    const fixedText = PriceFormatter.fixDuplicatedPrice(currentText);
+                    
+                    if (currentText !== fixedText) {
+                        console.log(`🔧 Исправляем цену: ${currentText} -> ${fixedText}`);
+                        $element.text(fixedText);
+                    }
                 }
             });
         });
@@ -1575,13 +1617,19 @@ jQuery(document).ready(function($) {
                     
                     var newTotal = subtotal + deliveryCost + tax;
                     
+                    // Форматируем большие суммы с пробелами для читаемости
+                    var formattedTotal = newTotal.toLocaleString('ru-RU') + ' руб.';
+                    
                     var totalValueElement = totalBlock.find('.wc-block-components-totals-item__value');
                     var currentText = totalValueElement.text().trim();
-                    var newText = newTotal + ' руб.';
                     
-                    if (currentText !== newText) {
-                        totalValueElement.text(newText);
-                        console.log('💰 Обновлена итоговая сумма:', newText);
+                    // Сравниваем числовые значения, а не строки
+                    var currentValue = PriceFormatter.extractCleanPrice(currentText);
+                    
+                    if (Math.abs(currentValue - newTotal) > 1) { // Разница больше 1 рубля
+                        totalValueElement.text(formattedTotal);
+                        console.log('💰 Обновлена итоговая сумма:', formattedTotal, '(было:', currentText + ')');
+                        console.log('💡 Расчет: подытог', subtotal, '+ доставка', deliveryCost, '+ налог', tax, '=', newTotal);
                     }
                 }
             }
@@ -1864,5 +1912,8 @@ jQuery(document).ready(function($) {
     const priceCheckInterval = window.innerWidth <= 768 ? 3000 : 2000;
     setInterval(() => fixExistingDuplicatedPrices(), priceCheckInterval);
     
-    console.log('🚀 СДЭК Delivery Fixed загружен (оптимизировано для мобильных)');
+    console.log('🚀 СДЭК Delivery Fixed v2.0 загружен');
+    console.log('✅ Исправления: разделение коробок, CORS ошибки, производительность, дублированные цены');
+    console.log('🏙️ Поддержка 1000+ городов России');
+    console.log('📱 Оптимизировано для мобильных устройств');
 });
