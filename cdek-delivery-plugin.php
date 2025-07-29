@@ -569,68 +569,56 @@ class CdekAPI {
     }
     
     public function get_delivery_points($address, $city = '') {
+        // Подготавливаем название города для API
+        $city_for_api = !empty($city) ? trim($city) : trim($address);
+        
+        // ИСПРАВЛЕНИЕ: Улучшенный поиск - убираем ограничения длины для быстрого поиска
+        if (empty($city_for_api)) {
+            error_log('СДЭК API: ❌ Не указан город для поиска');
+            return array();
+        }
+        
+        error_log('СДЭК API: 🔍 Поиск ПВЗ для города: "' . $city_for_api . '"');
+        
+        // Получаем токен
         $token = $this->get_auth_token();
         if (!$token) {
-            error_log('СДЭК API: Не удалось получить токен авторизации');
+            error_log('СДЭК API: ❌ Не удалось получить токен авторизации');
             return array();
         }
         
-        // Используем переданный город или извлекаем из адреса
-        $city_for_api = !empty($city) ? $city : $this->extract_city_from_address($address);
-        error_log('СДЭК API: Ищем пункты для города: ' . ($city_for_api ? $city_for_api : 'все города России'));
-        
-        // ИСПРАВЛЕНИЕ: Проверяем длину названия города и не ищем для коротких названий
-        if (!empty($city_for_api) && mb_strlen(trim($city_for_api)) < 3) {
-            error_log('СДЭК API: Название города слишком короткое: "' . $city_for_api . '", пропускаем поиск');
-            return array();
-        }
-        
-        // ИСПРАВЛЕНИЕ: Получаем city_code более надежным способом
         $city_code = null;
-        if (!empty($city_for_api)) {
-            // Пропускаем поиск city_code для частичных названий (менее 4 букв)
-            if (mb_strlen(trim($city_for_api)) >= 4) {
-                $city_code = $this->get_city_code($city_for_api, $token);
-                if ($city_code) {
-                    error_log('СДЭК API: Найден city_code для города "' . $city_for_api . '": ' . $city_code);
-                } else {
-                    error_log('СДЭК API: Не удалось найти city_code для города "' . $city_for_api . '". Попробуем альтернативные методы поиска.');
-                    
-                    // Альтернативный поиск по части названия города
-                    $city_code = $this->get_city_code_fuzzy($city_for_api, $token);
-                    if ($city_code) {
-                        error_log('СДЭК API: Найден city_code альтернативным поиском: ' . $city_code);
-                    }
-                }
-            } else {
-                error_log('СДЭК API: Название города слишком короткое для поиска city_code: "' . $city_for_api . '"');
+        
+        // ИСПРАВЛЕНИЕ: Сразу пытаемся получить city_code для любой длины
+        if (mb_strlen(trim($city_for_api)) >= 3) {
+            $city_code = $this->get_city_code($city_for_api, $token);
+            
+            // Если не нашли точное совпадение, пытаемся альтернативный поиск
+            if (!$city_code) {
+                $city_code = $this->get_city_code_fuzzy($city_for_api, $token);
             }
         }
         
         // ИСПРАВЛЕНИЕ: Улучшенные параметры запроса согласно документации API v2
         $params = array(
-            'type' => 'ALL', // ИСПРАВЛЕНИЕ: Все типы (PVZ + POSTAMAT)
+            'type' => 'PVZ', // ТОЛЬКО пункты выдачи заказов
             'country_code' => 'RU', // Россия
             'is_reception' => 'true', // Есть приём заказов
             'have_cash' => 'true', // Принимает наличные
             'have_cashless' => 'true', // Принимает безналичные
             'allowed_cod' => 'true', // Разрешен наложенный платеж
             'is_handout' => 'true', // Является пунктом выдачи
-            'size' => '1000' // Увеличиваем лимит результатов
+            'size' => '500' // Оптимальный лимит для быстрого поиска
         );
         
-        // Добавляем фильтр по городу если найден city_code
+        // Добавляем фильтр по городу
         if ($city_code) {
             $params['city_code'] = $city_code;
-            error_log('СДЭК API: Применяем фильтр city_code: ' . $city_code);
-        } else if (!empty($city_for_api) && mb_strlen(trim($city_for_api)) >= 4) {
-            // Если city_code не найден И название достаточно длинное, используем фильтр по названию города
-            $params['city'] = $city_for_api;
-            error_log('СДЭК API: Применяем фильтр city: ' . $city_for_api);
+            error_log('СДЭК API: ✅ Используем city_code: ' . $city_code);
         } else {
-            // Для коротких названий не применяем фильтры, возвращаем пустой результат
-            error_log('СДЭК API: Пропускаем запрос для короткого названия города: ' . $city_for_api);
-            return array();
+            // Если нет city_code, используем название города напрямую
+            $params['city'] = $city_for_api;
+            error_log('СДЭК API: 🔍 Используем название города: ' . $city_for_api);
         }
         
         // Строим URL с параметрами для GET запроса
@@ -660,33 +648,11 @@ class CdekAPI {
             $data = json_decode($body, true);
             
             if (is_array($data)) {
-                error_log('СДЭК API: ✅ Найдено пунктов: ' . count($data));
+                error_log('СДЭК API: ✅ Найдено ПВЗ: ' . count($data));
                 
-                // ИСПРАВЛЕНИЕ: Подсчет типов точек для диагностики
-                $pvz_count = 0;
-                $postamat_count = 0;
-                foreach ($data as $point) {
-                    if (isset($point['type'])) {
-                        if (stripos($point['type'], 'postamat') !== false || stripos($point['type'], 'постамат') !== false) {
-                            $postamat_count++;
-                        } else {
-                            $pvz_count++;
-                        }
-                    } else {
-                        // Если тип не указан, проверяем по названию
-                        if (isset($point['name']) && (stripos($point['name'], 'постамат') !== false)) {
-                            $postamat_count++;
-                        } else {
-                            $pvz_count++;
-                        }
-                    }
-                }
-                
-                error_log('СДЭК API: 📊 Статистика точек для города "' . $city_for_api . '": ПВЗ=' . $pvz_count . ', Постоматы=' . $postamat_count . ', Всего=' . count($data));
-                
-                // ИСПРАВЛЕНИЕ: Дополнительная фильтрация на клиентской стороне если нужно
-                if (!empty($city_for_api) && !$city_code) {
-                    // Если не нашли city_code, дополнительно фильтруем результаты
+                // ИСПРАВЛЕНИЕ: Быстрая фильтрация только по городу если нужно
+                if (!$city_code && !empty($city_for_api)) {
+                    // Дополнительная фильтрация по названию города
                     $filtered_data = array_filter($data, function($point) use ($city_for_api) {
                         if (isset($point['location']['city'])) {
                             return stripos($point['location']['city'], $city_for_api) !== false;
@@ -695,30 +661,29 @@ class CdekAPI {
                     });
                     
                     if (count($filtered_data) < count($data)) {
-                        error_log('СДЭК API: После дополнительной фильтрации осталось: ' . count($filtered_data));
+                        error_log('СДЭК API: После фильтрации осталось: ' . count($filtered_data));
                         $data = array_values($filtered_data);
                     }
                 }
                 
-                // Детальная отладка для конкретных городов
-                if ($city_for_api && strtolower($city_for_api) === 'курск') {
-                    error_log('🎯 СДЭК API: Отладка Курска - всего пунктов: ' . count($data));
-                }
-                
-                if ($city_for_api && strtolower($city_for_api) === 'москва') {
-                    error_log('🏛️ СДЭК API: Отладка Москвы - всего пунктов: ' . count($data));
-                }
-                
-                if ($city_for_api && (strtolower($city_for_api) === 'тюмень' || stripos($city_for_api, 'тюмен') !== false)) {
-                    error_log('🏙️ СДЭК API: Отладка Тюмени - всего пунктов: ' . count($data));
-                    // Ищем ПВЗ с адресом Зелинского
-                    $zelinsky_points = array_filter($data, function($point) {
-                        if (isset($point['location']['address'])) {
-                            return stripos($point['location']['address'], 'зелинск') !== false;
+                // ЛОГИРОВАНИЕ для конкретных городов
+                if (in_array(strtolower($city_for_api), ['курск', 'москва', 'тюмень'])) {
+                    error_log('СДЭК API: 🎯 Отладка для города "' . $city_for_api . '": найдено ' . count($data) . ' ПВЗ');
+                    
+                    // Проверяем наличие ПВЗ на "Зелинского" для Тюмени
+                    if (strtolower($city_for_api) === 'тюмень') {
+                        $zelinsky_found = false;
+                        foreach ($data as $point) {
+                            if (isset($point['location']['address']) && stripos($point['location']['address'], 'зелинского') !== false) {
+                                $zelinsky_found = true;
+                                error_log('СДЭК API: ✅ Найден ПВЗ на Зелинского: ' . $point['location']['address']);
+                                break;
+                            }
                         }
-                        return false;
-                    });
-                    error_log('🎯 СДЭК API: ПВЗ с адресом Зелинского: ' . count($zelinsky_points));
+                        if (!$zelinsky_found) {
+                            error_log('СДЭК API: ❌ ПВЗ на Зелинского НЕ найден');
+                        }
+                    }
                 }
                 
                 return $data;

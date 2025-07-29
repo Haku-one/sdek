@@ -1517,38 +1517,21 @@ jQuery(document).ready(function($) {
             if (point.location && point.location.latitude && point.location.longitude) {
                 var coords = [point.location.latitude, point.location.longitude];
                 
-                // ИСПРАВЛЕНИЕ: Определяем тип точки и иконку
-                var pointType = 'ПВЗ'; // По умолчанию
-                var iconColor = '#1e88e5'; // Синий для ПВЗ
-                var iconPreset = 'islands#blueIcon';
-                
-                if (point.type && (point.type.toLowerCase().includes('postamat') || point.type.toLowerCase().includes('постамат'))) {
-                    pointType = 'Постамат';
-                    iconColor = '#ff9800'; // Оранжевый для постоматов
-                    iconPreset = 'islands#orangeIcon';
-                } else if (point.name && point.name.toLowerCase().includes('постамат')) {
-                    pointType = 'Постамат';
-                    iconColor = '#ff9800';
-                    iconPreset = 'islands#orangeIcon';
-                }
-                
                 var placemark = new ymaps.Placemark(coords, {
                     balloonContentHeader: '<strong>' + (point.name || 'Пункт выдачи') + '</strong>',
                     balloonContentBody: 
                         '<div style="font-size: 14px;">' +
-                        '<p><strong>Тип:</strong> ' + pointType + '</p>' +
                         '<p><strong>Адрес:</strong> ' + (point.location.address || 'Адрес не указан') + '</p>' +
                         (point.work_time ? '<p><strong>Режим работы:</strong> ' + point.work_time + '</p>' : '') +
                         (point.note ? '<p><strong>Примечание:</strong> ' + point.note + '</p>' : '') +
                         (point.phone ? '<p><strong>Телефон:</strong> ' + point.phone + '</p>' : '') +
                         '</div>',
-                    hintContent: pointType + ': ' + (point.name || point.location.address)
+                    hintContent: 'ПВЗ: ' + (point.name || point.location.address)
                 }, {
-                    preset: iconPreset,
-                    iconColor: iconColor
+                    preset: 'islands#blueIcon'
                 });
                 
-                // ИСПРАВЛЕНИЕ: Возвращаем старую логику - клик по маркеру сразу выбирает ПВЗ
+                // Клик по маркеру сразу выбирает ПВЗ
                 placemark.events.add('click', function() {
                     selectCdekPoint(point);
                 });
@@ -1597,15 +1580,7 @@ jQuery(document).ready(function($) {
         // Запоминаем выбранный ПВЗ чтобы избежать повторных поисков
         window.lastSelectedPointCode = point.code;
         
-        // Определяем тип точки
-        var pointType = 'ПВЗ';
-        if (point.type && (point.type.toLowerCase().includes('postamat') || point.type.toLowerCase().includes('постамат'))) {
-            pointType = 'Постамат';
-        } else if (point.name && point.name.toLowerCase().includes('постамат')) {
-            pointType = 'Постамат';
-        }
-        
-        console.log('✅ Выбран ' + pointType + ':', point.name, '(код:', point.code + ')');
+        console.log('✅ Выбран ПВЗ:', point.name, '(код:', point.code + ')');
         
         // Показываем информацию о выбранном пункте
         $('#cdek-point-info').html(formatPointInfo(point));
@@ -1642,7 +1617,7 @@ jQuery(document).ready(function($) {
         // Обновляем информацию о заказе и рассчитываем стоимость
         updateOrderSummary(point);
         
-        console.log('✅ Выбран ' + pointType + ':', point.name, '(код:', point.code + ')');
+        console.log('✅ ПВЗ выбран и цена рассчитывается...');
     };
     
     function clearSelectedPoint() {
