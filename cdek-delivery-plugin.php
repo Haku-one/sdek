@@ -58,6 +58,9 @@ class CdekDeliveryPlugin {
         // Отображение информации о пункте выдачи в админке
         add_action('woocommerce_admin_order_data_after_shipping_address', array($this, 'display_cdek_point_in_admin'));
         
+        // НОВОЕ: Добавляем информацию о доставке в email уведомления
+        add_action('woocommerce_email_order_details', array($this, 'add_cdek_info_to_email'), 20, 4);
+        
         // AJAX для проверки подключения
         add_action('wp_ajax_test_cdek_connection', array($this, 'ajax_test_cdek_connection'));
         
@@ -423,6 +426,7 @@ class CdekDeliveryPlugin {
     }
     
     public function save_cdek_point_data($order_id) {
+        // Сохраняем код и данные пункта выдачи
         if (isset($_POST['cdek_selected_point_code']) && !empty($_POST['cdek_selected_point_code'])) {
             update_post_meta($order_id, '_cdek_point_code', sanitize_text_field($_POST['cdek_selected_point_code']));
         }
@@ -433,21 +437,157 @@ class CdekDeliveryPlugin {
                 update_post_meta($order_id, '_cdek_point_data', $point_data);
             }
         }
+        
+        // НОВОЕ: Сохраняем габариты и вес товаров
+        if (isset($_POST['cdek_cart_dimensions']) && !empty($_POST['cdek_cart_dimensions'])) {
+            $cart_dimensions = json_decode(stripslashes($_POST['cdek_cart_dimensions']), true);
+            if ($cart_dimensions) {
+                update_post_meta($order_id, '_cdek_cart_dimensions', $cart_dimensions);
+            }
+        }
+        
+        if (isset($_POST['cdek_cart_weight']) && !empty($_POST['cdek_cart_weight'])) {
+            update_post_meta($order_id, '_cdek_cart_weight', floatval($_POST['cdek_cart_weight']));
+        }
+        
+        if (isset($_POST['cdek_cart_value']) && !empty($_POST['cdek_cart_value'])) {
+            update_post_meta($order_id, '_cdek_cart_value', floatval($_POST['cdek_cart_value']));
+        }
+        
+        // НОВОЕ: Сохраняем стоимость доставки
+        if (isset($_POST['cdek_delivery_cost']) && !empty($_POST['cdek_delivery_cost'])) {
+            update_post_meta($order_id, '_cdek_delivery_cost', floatval($_POST['cdek_delivery_cost']));
+        }
+        
+        // НОВОЕ: Сохраняем детали товаров для отчетности
+        $order = wc_get_order($order_id);
+        if ($order) {
+            $order_details = array();
+            
+            foreach ($order->get_items() as $item) {
+                $product = $item->get_product();
+                if ($product) {
+                    $item_details = array(
+                        'name' => $item->get_name(),
+                        'quantity' => $item->get_quantity(),
+                        'price' => $item->get_total(),
+                        'weight' => $product->get_weight() ? $product->get_weight() : 0,
+                        'dimensions' => array(
+                            'length' => $product->get_length() ? $product->get_length() : 0,
+                            'width' => $product->get_width() ? $product->get_width() : 0,
+                            'height' => $product->get_height() ? $product->get_height() : 0
+                        )
+                    );
+                    $order_details[] = $item_details;
+                }
+            }
+            
+            if (!empty($order_details)) {
+                update_post_meta($order_id, '_cdek_order_items_details', $order_details);
+            }
+        }
     }
     
     public function display_cdek_point_in_admin($order) {
         $point_code = get_post_meta($order->get_id(), '_cdek_point_code', true);
         $point_data = get_post_meta($order->get_id(), '_cdek_point_data', true);
+        $cart_dimensions = get_post_meta($order->get_id(), '_cdek_cart_dimensions', true);
+        $cart_weight = get_post_meta($order->get_id(), '_cdek_cart_weight', true);
+        $cart_value = get_post_meta($order->get_id(), '_cdek_cart_value', true);
+        $delivery_cost = get_post_meta($order->get_id(), '_cdek_delivery_cost', true);
+        $order_items_details = get_post_meta($order->get_id(), '_cdek_order_items_details', true);
         
-        if ($point_code && $point_data) {
-            echo '<div class="cdek-point-info" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
-            echo '<h4>Пункт выдачи СДЭК:</h4>';
-            echo '<strong>' . esc_html($point_data['name']) . '</strong><br>';
-            echo 'Код: ' . esc_html($point_code) . '<br>';
-            echo 'Адрес: ' . esc_html($point_data['location']['address_full']) . '<br>';
-            if (isset($point_data['phone'])) {
-                echo 'Телефон: ' . esc_html($point_data['phone']) . '<br>';
+        // Отображаем информацию если есть хотя бы что-то связанное со СДЭК
+        if ($point_code || $cart_dimensions || $cart_weight) {
+            echo '<div class="cdek-point-info">';
+            echo '<h4>📦 Информация о доставке СДЭК</h4>';
+            
+            // Информация о пункте выдачи
+            if ($point_code && $point_data) {
+                echo '<div style="margin-bottom: 15px; padding: 10px; background: #e8f5e8; border-left: 4px solid #4caf50;">';
+                echo '<h5>🏪 Пункт выдачи:</h5>';
+                echo '<strong>' . esc_html($point_data['name']) . '</strong><br>';
+                echo '<strong>Код:</strong> ' . esc_html($point_code) . '<br>';
+                echo '<strong>Адрес:</strong> ' . esc_html($point_data['location']['address_full']) . '<br>';
+                if (isset($point_data['phone']) && $point_data['phone']) {
+                    echo '<strong>Телефон:</strong> ' . esc_html($point_data['phone']) . '<br>';
+                }
+                if (isset($point_data['work_time'])) {
+                    echo '<strong>Время работы:</strong> ' . esc_html($point_data['work_time']) . '<br>';
+                }
+                echo '</div>';
             }
+            
+            // Габариты и вес
+            if ($cart_dimensions || $cart_weight) {
+                echo '<div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107;">';
+                echo '<h5>📏 Габариты и вес посылки:</h5>';
+                
+                if ($cart_dimensions) {
+                    echo '<strong>Размеры:</strong> ' . 
+                         esc_html($cart_dimensions['length']) . ' × ' . 
+                         esc_html($cart_dimensions['width']) . ' × ' . 
+                         esc_html($cart_dimensions['height']) . ' см<br>';
+                    
+                    $volume = $cart_dimensions['length'] * $cart_dimensions['width'] * $cart_dimensions['height'];
+                    echo '<strong>Объем:</strong> ' . number_format($volume, 2) . ' см³<br>';
+                }
+                
+                if ($cart_weight) {
+                    echo '<strong>Вес:</strong> ' . number_format($cart_weight, 0) . ' г<br>';
+                }
+                
+                if ($cart_value) {
+                    echo '<strong>Стоимость товаров:</strong> ' . number_format($cart_value, 2) . ' руб.<br>';
+                }
+                
+                if ($delivery_cost) {
+                    echo '<strong>Стоимость доставки:</strong> ' . number_format($delivery_cost, 2) . ' руб.<br>';
+                }
+                echo '</div>';
+            }
+            
+            // Детали товаров
+            if ($order_items_details && is_array($order_items_details)) {
+                echo '<div style="margin-bottom: 15px; padding: 10px; background: #d1ecf1; border-left: 4px solid #17a2b8;">';
+                echo '<h5>🛍️ Детали товаров:</h5>';
+                echo '<table style="width: 100%; border-collapse: collapse;">';
+                echo '<thead>';
+                echo '<tr style="background: #f8f9fa;">';
+                echo '<th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">Товар</th>';
+                echo '<th style="padding: 8px; border: 1px solid #dee2e6; text-align: center;">Кол-во</th>';
+                echo '<th style="padding: 8px; border: 1px solid #dee2e6; text-align: center;">Габариты (Д×Ш×В)</th>';
+                echo '<th style="padding: 8px; border: 1px solid #dee2e6; text-align: center;">Вес</th>';
+                echo '<th style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">Стоимость</th>';
+                echo '</tr>';
+                echo '</thead>';
+                echo '<tbody>';
+                
+                foreach ($order_items_details as $item) {
+                    echo '<tr>';
+                    echo '<td style="padding: 8px; border: 1px solid #dee2e6;">' . esc_html($item['name']) . '</td>';
+                    echo '<td style="padding: 8px; border: 1px solid #dee2e6; text-align: center;">' . esc_html($item['quantity']) . '</td>';
+                    echo '<td style="padding: 8px; border: 1px solid #dee2e6; text-align: center;">';
+                    if ($item['dimensions']['length'] || $item['dimensions']['width'] || $item['dimensions']['height']) {
+                        echo esc_html($item['dimensions']['length']) . '×' . 
+                             esc_html($item['dimensions']['width']) . '×' . 
+                             esc_html($item['dimensions']['height']) . ' см';
+                    } else {
+                        echo '—';
+                    }
+                    echo '</td>';
+                    echo '<td style="padding: 8px; border: 1px solid #dee2e6; text-align: center;">';
+                    echo $item['weight'] ? number_format($item['weight'], 0) . ' г' : '—';
+                    echo '</td>';
+                    echo '<td style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">' . number_format($item['price'], 2) . ' руб.</td>';
+                    echo '</tr>';
+                }
+                
+                echo '</tbody>';
+                echo '</table>';
+                echo '</div>';
+            }
+            
             echo '</div>';
         }
     }
@@ -481,6 +621,112 @@ class CdekDeliveryPlugin {
     public function load_blocks_integration() {
         if (class_exists('Automattic\WooCommerce\Blocks\Integrations\IntegrationInterface')) {
             include_once plugin_dir_path(__FILE__) . 'includes/class-wc-blocks-integration.php';
+        }
+    }
+    
+    public function add_cdek_info_to_email($order, $sent_to_admin, $plain_text, $email) {
+        // Показываем информацию о СДЭК только в email клиенту и администратору
+        if (!in_array($email->id, ['new_order', 'customer_processing_order', 'customer_completed_order'])) {
+            return;
+        }
+        
+        $point_code = get_post_meta($order->get_id(), '_cdek_point_code', true);
+        $point_data = get_post_meta($order->get_id(), '_cdek_point_data', true);
+        $cart_dimensions = get_post_meta($order->get_id(), '_cdek_cart_dimensions', true);
+        $cart_weight = get_post_meta($order->get_id(), '_cdek_cart_weight', true);
+        $delivery_cost = get_post_meta($order->get_id(), '_cdek_delivery_cost', true);
+        
+        // Выводим информацию если есть данные о доставке СДЭК
+        if ($point_code || $cart_dimensions || $cart_weight) {
+            if ($plain_text) {
+                // Текстовая версия email
+                echo "\n" . str_repeat('=', 50) . "\n";
+                echo "📦 ИНФОРМАЦИЯ О ДОСТАВКЕ СДЭК\n";
+                echo str_repeat('=', 50) . "\n";
+                
+                if ($point_code && $point_data) {
+                    echo "\n🏪 ПУНКТ ВЫДАЧИ:\n";
+                    echo "Название: " . $point_data['name'] . "\n";
+                    echo "Код: " . $point_code . "\n";
+                    echo "Адрес: " . $point_data['location']['address_full'] . "\n";
+                    if (isset($point_data['phone']) && $point_data['phone']) {
+                        echo "Телефон: " . $point_data['phone'] . "\n";
+                    }
+                    if (isset($point_data['work_time'])) {
+                        echo "Время работы: " . $point_data['work_time'] . "\n";
+                    }
+                }
+                
+                if ($cart_dimensions || $cart_weight) {
+                    echo "\n📏 ГАБАРИТЫ И ВЕС ПОСЫЛКИ:\n";
+                    if ($cart_dimensions) {
+                        echo "Размеры: " . $cart_dimensions['length'] . " × " . 
+                             $cart_dimensions['width'] . " × " . 
+                             $cart_dimensions['height'] . " см\n";
+                        $volume = $cart_dimensions['length'] * $cart_dimensions['width'] * $cart_dimensions['height'];
+                        echo "Объем: " . number_format($volume, 2) . " см³\n";
+                    }
+                    if ($cart_weight) {
+                        echo "Вес: " . number_format($cart_weight, 0) . " г\n";
+                    }
+                    if ($delivery_cost) {
+                        echo "Стоимость доставки: " . number_format($delivery_cost, 2) . " руб.\n";
+                    }
+                }
+                
+                echo str_repeat('=', 50) . "\n\n";
+                
+            } else {
+                // HTML версия email
+                echo '<div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; font-family: Arial, sans-serif;">';
+                echo '<h3 style="color: #333; margin-top: 0; border-bottom: 2px solid #007cba; padding-bottom: 10px;">📦 Информация о доставке СДЭК</h3>';
+                
+                if ($point_code && $point_data) {
+                    echo '<div style="margin: 15px 0; padding: 15px; background: #e8f5e8; border-left: 4px solid #4caf50; border-radius: 4px;">';
+                    echo '<h4 style="color: #2e7d32; margin: 0 0 10px 0;">🏪 Пункт выдачи</h4>';
+                    echo '<p style="margin: 5px 0;"><strong>Название:</strong> ' . esc_html($point_data['name']) . '</p>';
+                    echo '<p style="margin: 5px 0;"><strong>Код:</strong> ' . esc_html($point_code) . '</p>';
+                    echo '<p style="margin: 5px 0;"><strong>Адрес:</strong> ' . esc_html($point_data['location']['address_full']) . '</p>';
+                    if (isset($point_data['phone']) && $point_data['phone']) {
+                        echo '<p style="margin: 5px 0;"><strong>Телефон:</strong> ' . esc_html($point_data['phone']) . '</p>';
+                    }
+                    if (isset($point_data['work_time'])) {
+                        echo '<p style="margin: 5px 0;"><strong>Время работы:</strong> ' . esc_html($point_data['work_time']) . '</p>';
+                    }
+                    echo '</div>';
+                }
+                
+                if ($cart_dimensions || $cart_weight) {
+                    echo '<div style="margin: 15px 0; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+                    echo '<h4 style="color: #856404; margin: 0 0 10px 0;">📏 Габариты и вес посылки</h4>';
+                    
+                    if ($cart_dimensions) {
+                        echo '<p style="margin: 5px 0;"><strong>Размеры:</strong> ' . 
+                             esc_html($cart_dimensions['length']) . ' × ' . 
+                             esc_html($cart_dimensions['width']) . ' × ' . 
+                             esc_html($cart_dimensions['height']) . ' см</p>';
+                        
+                        $volume = $cart_dimensions['length'] * $cart_dimensions['width'] * $cart_dimensions['height'];
+                        echo '<p style="margin: 5px 0;"><strong>Объем:</strong> ' . number_format($volume, 2) . ' см³</p>';
+                    }
+                    
+                    if ($cart_weight) {
+                        echo '<p style="margin: 5px 0;"><strong>Вес:</strong> ' . number_format($cart_weight, 0) . ' г</p>';
+                    }
+                    
+                    if ($delivery_cost) {
+                        echo '<p style="margin: 5px 0;"><strong>Стоимость доставки:</strong> ' . number_format($delivery_cost, 2) . ' руб.</p>';
+                    }
+                    
+                    echo '</div>';
+                }
+                
+                echo '<div style="margin-top: 15px; padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">';
+                echo '<p style="margin: 0; color: #155724; font-size: 14px;">💡 <strong>Важно:</strong> Сохраните код пункта выдачи для получения посылки. При получении необходимо предъявить документ, удостоверяющий личность.</p>';
+                echo '</div>';
+                
+                echo '</div>';
+            }
         }
     }
 }

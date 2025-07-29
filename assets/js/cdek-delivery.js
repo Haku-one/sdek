@@ -1694,6 +1694,45 @@ jQuery(document).ready(function($) {
             $('#cdek-selected-point-data').val(JSON.stringify(point));
         }
         
+        // НОВОЕ: Отправляем дополнительные данные о заказе
+        var cartData = getCartDataForCdek();
+        
+        // Габариты корзины
+        if (cartData.dimensions && !$('#cdek-cart-dimensions').length) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-cart-dimensions',
+                name: 'cdek_cart_dimensions',
+                value: JSON.stringify(cartData.dimensions)
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else if (cartData.dimensions) {
+            $('#cdek-cart-dimensions').val(JSON.stringify(cartData.dimensions));
+        }
+        
+        // Вес корзины
+        if (cartData.totalWeight && !$('#cdek-cart-weight').length) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-cart-weight',
+                name: 'cdek_cart_weight',
+                value: cartData.totalWeight
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else if (cartData.totalWeight) {
+            $('#cdek-cart-weight').val(cartData.totalWeight);
+        }
+        
+        // Стоимость корзины
+        if (cartData.totalPrice && !$('#cdek-cart-value').length) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-cart-value',
+                name: 'cdek_cart_value',
+                value: cartData.totalPrice
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else if (cartData.totalPrice) {
+            $('#cdek-cart-value').val(cartData.totalPrice);
+        }
+        
         // Обновляем информацию о заказе и рассчитываем стоимость
         updateOrderSummary(point);
         
@@ -1843,6 +1882,18 @@ jQuery(document).ready(function($) {
         });
         
         window.currentDeliveryCost = deliveryCost;
+        
+        // НОВОЕ: Сохраняем стоимость доставки в скрытое поле
+        if (!$('#cdek-delivery-cost').length) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-delivery-cost',
+                name: 'cdek_delivery_cost',
+                value: deliveryCost
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            $('#cdek-delivery-cost').val(deliveryCost);
+        }
         
         $(document.body).trigger('updated_checkout');
         $(document.body).trigger('updated_cart_totals');
@@ -2455,76 +2506,60 @@ jQuery(document).ready(function($) {
                 mapContainer.show();
                 mapContainer[0].style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
                 console.log('🔧 Показан cdek-map-container');
+                
+                // ИСПРАВЛЕНИЕ: Всегда пересоздаём элемент карты для надежности
+                if (mapElement.length === 0) {
+                    mapContainer.html('<div id="cdek-map" style="width: 100%; height: 450px; display: block !important;"></div>');
+                    mapElement = $('#cdek-map'); // Обновляем ссылку
+                    console.log('🔧 Создан новый элемент карты');
+                }
+            } else {
+                // Если нет контейнера карты, создаём его
+                var targetBlock = mapBlock.length > 0 ? mapBlock : $('.wc-block-components-shipping-rates-control').first();
+                if (targetBlock.length > 0) {
+                    var mapHtml = '<div id="cdek-map-container" style="display: block !important; visibility: visible !important; position: relative !important;"><div id="cdek-map" style="width: 100%; height: 450px; display: block !important;"></div></div>';
+                    targetBlock.after(mapHtml);
+                    mapContainer = $('#cdek-map-container');
+                    mapElement = $('#cdek-map');
+                    console.log('🔧 Создан новый контейнер карты');
+                }
             }
             
-            // Инициализируем карту если она еще не создана или создаём заново
+            // ИСПРАВЛЕНИЕ: Всегда переинициализируем карту при переключении
             setTimeout(() => {
-                var needsMapInit = false;
-                
-                if (!cdekMap) {
-                    console.log('🔄 Карта не инициализирована, создаём');
-                    needsMapInit = true;
-                } else if (mapElement.length === 0) {
-                    console.log('🔄 Элемент карты отсутствует, пересоздаём');
+                // Принудительно обнуляем существующую карту
+                if (cdekMap) {
+                    try {
+                        cdekMap.destroy();
+                    } catch (e) {
+                        // Игнорируем ошибки при удалении
+                    }
                     cdekMap = null;
-                    needsMapInit = true;
-                } else if (mapElement[0].offsetWidth === 0 || mapElement[0].offsetHeight === 0) {
-                    console.log('🔄 Карта имеет нулевые размеры, переинициализируем');
-                    cdekMap = null;
-                    needsMapInit = true;
+                    console.log('🔄 Предыдущая карта удалена');
                 }
                 
-                if (needsMapInit) {
-                    // Убеждаемся что контейнер видим перед инициализацией
-                    if (mapElement.length === 0 && mapContainer.length > 0) {
-                        // Пересоздаём элемент карты если его нет
-                        mapContainer.html('<div id="cdek-map" style="width: 100%; height: 450px; display: block !important;"></div>');
-                    }
+                // Убеждаемся что элемент карты готов
+                mapElement = $('#cdek-map');
+                if (mapElement.length > 0) {
+                    mapElement[0].style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important; position: relative !important;';
                     
+                    // Очищаем содержимое элемента карты
+                    mapElement.empty();
+                    
+                    // Инициализируем новую карту
                     initYandexMap();
                     
-                    // Восстанавливаем ПВЗ если они были найдены ранее
+                    // Восстанавливаем ПВЗ с задержкой
                     if (cdekPoints && cdekPoints.length > 0) {
                         setTimeout(() => {
-                            console.log('📍 Восстанавливаем ПВЗ после показа карты');
+                            console.log('📍 Восстанавливаем ПВЗ после пересоздания карты');
                             displayCdekPoints(cdekPoints);
-                        }, 1500);
+                        }, 2000); // Увеличиваем задержку для надежности
                     }
                 } else {
-                    console.log('✅ Карта готова к использованию');
-                    
-                    // Убеждаемся что элемент карты видим
-                    if (mapElement.length > 0) {
-                        mapElement[0].style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
-                    }
-                    
-                    // Принудительно перерисовываем карту
-                    if (cdekMap && cdekMap.container) {
-                        try {
-                            cdekMap.container.fitToViewport();
-                            console.log('🔄 Карта перерисована');
-                        } catch (e) {
-                            console.log('⚠️ Не удалось перерисовать карту:', e.message);
-                        }
-                    }
-                    
-                    // Восстанавливаем ПВЗ если нужно
-                    if (cdekPoints && cdekPoints.length > 0 && cdekMap) {
-                        setTimeout(() => {
-                            console.log('📍 Обновляем отображение ПВЗ');
-                            displayCdekPoints(cdekPoints);
-                        }, 500);
-                    }
+                    console.log('❌ Не удалось найти элемент карты для инициализации');
                 }
-            }, 300);
-            
-            // Дополнительная проверка через секунду
-            setTimeout(() => {
-                if (mapElement.length > 0 && (mapElement[0].offsetWidth === 0 || mapElement[0].offsetHeight === 0)) {
-                    console.log('🔄 Дополнительная попытка восстановления карты');
-                    showMapForDelivery();
-                }
-            }, 1000);
+            }, 100);
         }
         
         function hideMapForOtherMethods() {
@@ -2533,14 +2568,38 @@ jQuery(document).ready(function($) {
             
             console.log('🙈 Скрываем карту для других методов доставки');
             
+            // ИСПРАВЛЕНИЕ: Не удаляем элементы, а только скрываем их
             if (mapBlock.length > 0) {
-                mapBlock.hide();
+                mapBlock.css({
+                    'display': 'none',
+                    'visibility': 'hidden',
+                    'height': '0',
+                    'overflow': 'hidden'
+                });
                 console.log('🔧 Скрыт wp-block-cdek-checkout-map-block');
             }
             
             if (mapContainer.length > 0) {
-                mapContainer.hide();
+                mapContainer.css({
+                    'display': 'none',
+                    'visibility': 'hidden',
+                    'height': '0',
+                    'overflow': 'hidden'
+                });
                 console.log('🔧 Скрыт cdek-map-container');
+            }
+            
+            // ИСПРАВЛЕНИЕ: Сохраняем ссылку на карту но останавливаем её обновления
+            if (cdekMap) {
+                try {
+                    // Просто скрываем контейнер, не удаляем карту
+                    var mapElement = document.getElementById('cdek-map');
+                    if (mapElement) {
+                        mapElement.style.display = 'none';
+                    }
+                } catch (e) {
+                    console.log('⚠️ Ошибка при скрытии карты:', e.message);
+                }
             }
         }
 

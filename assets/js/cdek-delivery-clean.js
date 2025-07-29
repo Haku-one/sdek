@@ -104,6 +104,7 @@ class DOMBatcher {
             try {
                 op();
             } catch (error) {
+                
             }
         });
         
@@ -165,6 +166,7 @@ class PriceFormatter {
                     if (pattern.check(prefix, suffix)) {
                         const correctedNumber = pattern.prefixLen === Math.floor(mainNumber.length / 2) ? prefix : suffix;
                         const correctedText = priceText.replace(mainNumber, correctedNumber);
+                        
                         
                         return correctedText;
                     }
@@ -232,8 +234,10 @@ class SmartAddressSearch {
                             lat: position.coords.latitude,
                             lng: position.coords.longitude
                         };
+                        
                     },
                     (error) => {
+                        
                         // НЕ используем внешние API - избегаем CORS ошибок
                         this.setDefaultLocation();
                     },
@@ -243,6 +247,7 @@ class SmartAddressSearch {
                 this.setDefaultLocation();
             }
         } catch (error) {
+            
             this.setDefaultLocation();
         }
     }
@@ -430,6 +435,7 @@ jQuery(document).ready(function($) {
                     const fixedText = PriceFormatter.fixDuplicatedPrice(currentText);
                     
                     if (currentText !== fixedText) {
+                        
                         $element.text(fixedText);
                     }
                 }
@@ -487,6 +493,7 @@ jQuery(document).ready(function($) {
         var packagesCount = 1;
         
         
+        
         var processedItems = new Set();
         $('.wc-block-components-order-summary-item').each(function() {
             var $item = $(this);
@@ -503,6 +510,7 @@ jQuery(document).ready(function($) {
             var quantity = parseInt(quantityElement.text()) || 1;
             
             
+            
             var dimensionsElement = $item.find('.wc-block-components-product-details__value').filter(function() {
                 var siblingLabel = $(this).siblings('.wc-block-components-product-details__name');
                 var labelText = siblingLabel.text();
@@ -512,12 +520,14 @@ jQuery(document).ready(function($) {
             if (dimensionsElement.length > 0) {
                 var dimensionsText = dimensionsElement.text().trim();
                 
+                
                 var dimensionsMatch = dimensionsText.match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/);
                 
                 if (dimensionsMatch) {
                     var length = parseFloat(dimensionsMatch[1]);
                     var width = parseFloat(dimensionsMatch[2]);
                     var height = parseFloat(dimensionsMatch[3]);
+                    
                     
                     
                     var itemVolume = length * width * height * quantity;
@@ -540,6 +550,7 @@ jQuery(document).ready(function($) {
             if (weightElement.length > 0) {
                 var weightText = weightElement.text().trim();
                 
+                
                 var weightMatch = weightText.match(/(\d+(?:\.\d+)?)/);
                 
                 if (weightMatch) {
@@ -550,6 +561,7 @@ jQuery(document).ready(function($) {
                     }
                     
                     cartWeight += weight * quantity;
+                    
                 }
             }
             
@@ -558,8 +570,10 @@ jQuery(document).ready(function($) {
             if (totalPriceElement.length > 0) {
                 var totalPriceText = totalPriceElement.text().trim();
                 
+                
                 var totalPrice = PriceFormatter.extractCleanPrice(totalPriceText);
                 cartValue += totalPrice;
+                
             }
         });
         
@@ -569,12 +583,15 @@ jQuery(document).ready(function($) {
         if (totalOrderElement.length > 0) {
             var totalText = totalOrderElement.first().text().trim();
             
+            
             orderTotalFromFooter = PriceFormatter.extractCleanPrice(totalText);
+            
         }
         
         // ========== ИСПРАВЛЕННЫЙ РАСЧЕТ РАЗМЕРОВ УПАКОВКИ ==========
         var dimensions;
         if (hasValidDimensions && totalVolume > 0) {
+            console.log('Расчет размеров упаковки на основе товаров:', {
                 totalVolume: totalVolume,
                 maxLength: maxLength,
                 maxWidth: maxWidth,
@@ -606,6 +623,7 @@ jQuery(document).ready(function($) {
             var volume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
             if (volume > 300) {
                 
+                
                 // ПРАВИЛЬНЫЙ расчет количества коробок
                 packagesCount = Math.ceil(volume / 280); // 280 для безопасного запаса
                 
@@ -634,12 +652,17 @@ jQuery(document).ready(function($) {
                 var itemsPerPackage = Math.ceil(totalItems / packagesCount);
                 
                 
+                
+                
                 // Корректируем вес на одну коробку
                 cartWeight = cartWeight / packagesCount;
             } else {
+                
             }
             
+            
         } else {
+            
             dimensions = {
                 length: 30,
                 width: 20,
@@ -652,6 +675,7 @@ jQuery(document).ready(function($) {
         }
         
         if (orderTotalFromFooter > 0) {
+            
             cartValue = orderTotalFromFooter;
         } else if (cartValue === 0) {
             var subtotalElement = $('.wc-block-components-totals-item').filter(function() {
@@ -665,6 +689,7 @@ jQuery(document).ready(function($) {
             }
         }
         
+        console.log('Данные корзины для расчета:', {
             weight: cartWeight,
             value: cartValue,
             dimensions: dimensions,
@@ -687,14 +712,18 @@ jQuery(document).ready(function($) {
         var cartData = getCartDataForCalculation();
         
         if (typeof cdek_ajax === 'undefined' || !cdek_ajax.ajax_url) {
+            
             if (callback) callback(calculateFallbackCost(point, cartData));
             return;
         }
         
         if (!point || !point.code) {
+            
             if (callback) callback(calculateFallbackCost(point, cartData));
             return;
         }
+        
+        
         
         
         $.ajax({
@@ -715,34 +744,46 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 
+                
                 if (response && response.success && response.data && response.data.delivery_sum) {
                     var deliveryCost = parseInt(response.data.delivery_sum);
                     
                     if (cartData.packagesCount > 1) {
                         var costPerPackage = deliveryCost;
                         deliveryCost = deliveryCost * cartData.packagesCount;
+                        
                     }
                     
                     if (response.data.fallback) {
+                        
+                        
                     } else if (response.data.api_success) {
+                        
                         if (response.data.alternative_tariff) {
+                            
                         }
                     } else {
+                        
                     }
                     
                     if (callback) callback(deliveryCost);
                 } else if (!response.success) {
                     
+                    
                     // Используем fallback вместо показа ошибки пользователю
                     var fallbackCost = calculateFallbackCost(point, cartData);
+                    
                     if (callback) callback(fallbackCost);
                 } else {
                     
+                    
                     var fallbackCost = calculateFallbackCost(point, cartData);
+                    
                     if (callback) callback(fallbackCost);
                 }
             },
             error: function(xhr, status, error) {
+                console.error('❌ Критическая ошибка запроса к API СДЭК:', {
                     status: status,
                     error: error,
                     responseText: xhr.responseText,
@@ -751,6 +792,7 @@ jQuery(document).ready(function($) {
                 
                 // Используем fallback вместо показа ошибки
                 var fallbackCost = calculateFallbackCost(point, cartData);
+                
                 if (callback) callback(fallbackCost);
             }
         });
@@ -786,6 +828,7 @@ jQuery(document).ready(function($) {
         // Умножаем на количество коробок
         if (cartData.packagesCount > 1) {
             baseCost = baseCost * cartData.packagesCount;
+            
         }
         
         return baseCost;
@@ -1170,6 +1213,7 @@ jQuery(document).ready(function($) {
                 
                 localStorage.setItem('cdek_recent_searches', JSON.stringify(recentSearches));
             } catch (error) {
+                
             }
         }
         
@@ -1190,17 +1234,21 @@ jQuery(document).ready(function($) {
     function initYandexMap() {
         // ИСПРАВЛЕНИЕ: Добавляем дополнительные проверки и очистку
         
+        
         if (cdekMap) {
+            
             return;
         }
         
         if (typeof ymaps === 'undefined') {
+            
             setTimeout(initYandexMap, 1000);
             return;
         }
         
         var mapContainer = document.getElementById('cdek-map');
         if (!mapContainer) {
+            
             setTimeout(initYandexMap, 500);
             return;
         }
@@ -1212,48 +1260,62 @@ jQuery(document).ready(function($) {
         var parentContainer = document.getElementById('cdek-map-container');
         if (parentContainer) {
             parentContainer.style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
+            
         }
         
-        var mapBlock = document.querySelector('.wp-block-cdek-checkout-map-block');
-        if (mapBlock) {
-            mapBlock.style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
+        // Проверяем блок wp-block-cdek-checkout-map-block
+        var wpBlock = document.querySelector('.wp-block-cdek-checkout-map-block');
+        if (wpBlock) {
+            wpBlock.style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
+            
         }
         
-        // Проверяем размеры контейнера с задержкой
+        // Ждем, пока контейнер получит размеры
         var attempts = 0;
         var checkSize = function() {
             attempts++;
-            
             if (mapContainer.offsetWidth > 0 && mapContainer.offsetHeight > 0) {
+                
                 try {
-                    ymaps.ready(function() {
-                        cdekMap = new ymaps.Map('cdek-map', {
-                            center: [55.7558, 37.6176],
-                            zoom: 10,
-                            controls: ['zoomControl', 'typeSelector']
-                        });
-                        
-                        // Добавляем обработчик готовности карты
-                        cdekMap.events.add('ready', function() {
-                            
-                            // ИСПРАВЛЕНИЕ: Принудительно перерисовываем карту
-                            setTimeout(function() {
-                                if (cdekMap && cdekMap.container) {
-                                    cdekMap.container.fitToViewport();
-                                }
-                            }, 100);
-                        });
-                        
+                    cdekMap = new ymaps.Map(mapContainer, {
+                        center: [55.76, 37.64], // Центр Москвы по умолчанию
+                        zoom: 10,
+                        controls: ['zoomControl', 'fullscreenControl', 'geolocationControl']
                     });
+                    
+                    
+                    
+                    // Добавляем обработчик готовности карты
+                    cdekMap.events.add('ready', function() {
+                        
+                        
+                        // ИСПРАВЛЕНИЕ: Принудительно перерисовываем карту
+                        setTimeout(function() {
+                            if (cdekMap && cdekMap.container) {
+                                cdekMap.container.fitToViewport();
+                                
+                            }
+                        }, 100);
+                    });
+                    
                 } catch (error) {
+                    
                     cdekMap = null;
                     // Попробуем еще раз через секунду
                     setTimeout(initYandexMap, 1000);
                 }
             } else if (attempts < 10) {
+                
                 setTimeout(checkSize, 100);
             } else {
-                // Не удалось получить размеры контейнера
+                
+                console.log('🔍 Отладка контейнера:', {
+                    container: !!mapContainer,
+                    width: mapContainer ? mapContainer.offsetWidth : 'N/A',
+                    height: mapContainer ? mapContainer.offsetHeight : 'N/A',
+                    display: mapContainer ? getComputedStyle(mapContainer).display : 'N/A',
+                    visibility: mapContainer ? getComputedStyle(mapContainer).visibility : 'N/A'
+                });
             }
         };
         
@@ -1291,6 +1353,7 @@ jQuery(document).ready(function($) {
         
         // Проверяем, есть ли координаты для этого города
         if (cityCoordinates[searchCity]) {
+            
             callback(cityCoordinates[searchCity]);
             return;
         }
@@ -1301,14 +1364,18 @@ jQuery(document).ready(function($) {
                 if (res.geoObjects.getLength() > 0) {
                     var firstGeoObject = res.geoObjects.get(0);
                     var coords = firstGeoObject.geometry.getCoordinates();
+                    
                     callback(coords);
                 } else {
+                    
                     callback(null);
                 }
             }).catch(function(error) {
+                
                 callback(null);
             });
         } else {
+            
             callback(null);
         }
     }
@@ -1329,6 +1396,7 @@ jQuery(document).ready(function($) {
         
         // Проверяем, не ищем ли мы тот же город повторно
         if (window.currentSearchCity === parsedAddress.city && cdekPoints && cdekPoints.length > 0) {
+            
             hidePvzLoader();
             displayCdekPoints(cdekPoints);
             return;
@@ -1342,6 +1410,7 @@ jQuery(document).ready(function($) {
         window.currentSearchCity = parsedAddress.city;
         window.currentSearchStreet = parsedAddress.street;
         window.searchAttempts = 0; // счетчик попыток поиска
+        
         
         
         memoizedGeocodeAddress(address, function(coords) {
@@ -1386,6 +1455,7 @@ jQuery(document).ready(function($) {
         var currentStrategy = searchStrategies[Math.min(window.searchAttempts - 1, searchStrategies.length - 1)];
         
         
+        
         $.ajax({
             url: cdek_ajax.ajax_url,
             type: 'POST',
@@ -1402,6 +1472,7 @@ jQuery(document).ready(function($) {
                 
                 if (response.success && response.data && response.data.length > 0) {
                     
+                    
                     // Если это широкий поиск, фильтруем результаты по городу на клиенте
                     var filteredPoints = response.data;
                     if (window.searchAttempts === 4 && window.currentSearchCity) {
@@ -1413,6 +1484,7 @@ jQuery(document).ready(function($) {
                             }
                             return false;
                         });
+                        
                     }
                     
                     if (filteredPoints.length > 0) {
@@ -1423,8 +1495,10 @@ jQuery(document).ready(function($) {
                 
                 // Если текущая стратегия не дала результатов, пробуем следующую
                 if (window.searchAttempts < searchStrategies.length) {
+                    
                     setTimeout(performCdekSearchWithFallback, 1000);
                 } else {
+                    
                     showPvzErrorWithSuggestions('Не удалось найти пункты выдачи');
                 }
             },
@@ -1432,8 +1506,10 @@ jQuery(document).ready(function($) {
                 hidePvzLoader();
                 
                 if (window.searchAttempts < searchStrategies.length) {
+                    
                     setTimeout(performCdekSearchWithFallback, 1000);
                 } else {
+                    
                     showPvzErrorWithSuggestions('Ошибка загрузки пунктов выдачи');
                 }
             }
@@ -1474,6 +1550,9 @@ jQuery(document).ready(function($) {
         }
         
         var filteredPoints = points; // НЕ ФИЛЬТРУЕМ - API уже возвращает отфильтрованные данные
+        
+        
+        
         
         
         // Сортируем по расстоянию если есть координаты
@@ -1582,6 +1661,7 @@ jQuery(document).ready(function($) {
         window.lastSelectedPointCode = point.code;
         
         
+        
         // Показываем информацию о выбранном пункте
         $('#cdek-point-info').html(formatPointInfo(point));
         $('#cdek-selected-point').show();
@@ -1614,47 +1694,9 @@ jQuery(document).ready(function($) {
             $('#cdek-selected-point-data').val(JSON.stringify(point));
         }
         
-        // НОВОЕ: Отправляем дополнительные данные о заказе
-        var cartData = getCartDataForCdek();
-        
-        // Габариты корзины
-        if (cartData.dimensions && !$('#cdek-cart-dimensions').length) {
-            $('<input>').attr({
-                type: 'hidden',
-                id: 'cdek-cart-dimensions',
-                name: 'cdek_cart_dimensions',
-                value: JSON.stringify(cartData.dimensions)
-            }).appendTo('form.checkout, form.woocommerce-checkout');
-        } else if (cartData.dimensions) {
-            $('#cdek-cart-dimensions').val(JSON.stringify(cartData.dimensions));
-        }
-        
-        // Вес корзины
-        if (cartData.totalWeight && !$('#cdek-cart-weight').length) {
-            $('<input>').attr({
-                type: 'hidden',
-                id: 'cdek-cart-weight',
-                name: 'cdek_cart_weight',
-                value: cartData.totalWeight
-            }).appendTo('form.checkout, form.woocommerce-checkout');
-        } else if (cartData.totalWeight) {
-            $('#cdek-cart-weight').val(cartData.totalWeight);
-        }
-        
-        // Стоимость корзины
-        if (cartData.totalPrice && !$('#cdek-cart-value').length) {
-            $('<input>').attr({
-                type: 'hidden',
-                id: 'cdek-cart-value',
-                name: 'cdek_cart_value',
-                value: cartData.totalPrice
-            }).appendTo('form.checkout, form.woocommerce-checkout');
-        } else if (cartData.totalPrice) {
-            $('#cdek-cart-value').val(cartData.totalPrice);
-        }
-        
         // Обновляем информацию о заказе и рассчитываем стоимость
         updateOrderSummary(point);
+        
         
     };
     
@@ -1669,6 +1711,7 @@ jQuery(document).ready(function($) {
         $('#cdek-selected-point-data').remove();
         
         resetCdekShippingToDefault();
+        
         
     }
     
@@ -1801,18 +1844,6 @@ jQuery(document).ready(function($) {
         
         window.currentDeliveryCost = deliveryCost;
         
-        // НОВОЕ: Сохраняем стоимость доставки в скрытое поле
-        if (!$('#cdek-delivery-cost').length) {
-            $('<input>').attr({
-                type: 'hidden',
-                id: 'cdek-delivery-cost',
-                name: 'cdek_delivery_cost',
-                value: deliveryCost
-            }).appendTo('form.checkout, form.woocommerce-checkout');
-        } else {
-            $('#cdek-delivery-cost').val(deliveryCost);
-        }
-        
         $(document.body).trigger('updated_checkout');
         $(document.body).trigger('updated_cart_totals');
     }
@@ -1939,6 +1970,8 @@ jQuery(document).ready(function($) {
                     
                     if (Math.abs(currentValue - newTotal) > 1) { // Разница больше 1 рубля
                         totalValueElement.text(formattedTotal);
+                        
+                        
                     }
                 }
             }
@@ -1953,7 +1986,9 @@ jQuery(document).ready(function($) {
             });
             
             if (totalBlocks.length > 1) {
+                
                 totalBlocks.slice(1).remove();
+                
             }
         });
     }
@@ -2039,7 +2074,9 @@ jQuery(document).ready(function($) {
             var insertTarget = null;
             
             
+            
             if (mapBlock.length > 0) {
+                
                 insertTarget = mapBlock;
                 insertTarget.html(mapHtml);
                 
@@ -2047,7 +2084,9 @@ jQuery(document).ready(function($) {
                 mapBlock.each(function() {
                     this.style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
                 });
+                
             } else {
+                
                 
                 // Поиск альтернативных мест для вставки карты
                 var addressForm = $('.wc-block-components-address-form');
@@ -2055,6 +2094,7 @@ jQuery(document).ready(function($) {
                 var shippingControl = $('.wc-block-components-shipping-rates-control');
                 var checkoutMain = $('.wp-block-woocommerce-checkout');
                 
+                console.log('🔍 Альтернативные места:', {
                     addressForm: addressForm.length,
                     shippingBlock: shippingBlock.length, 
                     shippingControl: shippingControl.length,
@@ -2062,18 +2102,23 @@ jQuery(document).ready(function($) {
                 });
                 
                 if (shippingControl.length > 0) {
+                    
                     insertTarget = shippingControl.first();
                     insertTarget.after(mapHtml);
                 } else if (addressForm.length > 0) {
+                    
                     insertTarget = addressForm.first();
                     insertTarget.after(mapHtml);
                 } else if (shippingBlock.length > 0) {
+                    
                     insertTarget = shippingBlock.first();
                     insertTarget.after(mapHtml);
                 } else if (checkoutMain.length > 0) {
+                    
                     insertTarget = checkoutMain.first();
                     insertTarget.append(mapHtml);
                 } else {
+                    
                     // Принудительная вставка в body как последний шанс
                     $('body').append(mapHtml);
                 }
@@ -2084,6 +2129,7 @@ jQuery(document).ready(function($) {
         
         // ИСПРАВЛЕНИЕ: Даем больше времени на отображение контейнера
         setTimeout(() => {
+            
             initYandexMap();
             
             // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Убеждаемся что все контейнеры видимы
@@ -2094,12 +2140,14 @@ jQuery(document).ready(function($) {
                 
                 if (wpBlock && mapContainer && mapElement) {
                     
+                    
                     // Принудительно показываем все уровни
                     wpBlock.style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
                     mapContainer.style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
                     mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
                     
                     // Проверяем размеры
+                    console.log('📏 Размеры элементов:', {
                         wpBlock: { w: wpBlock.offsetWidth, h: wpBlock.offsetHeight },
                         mapContainer: { w: mapContainer.offsetWidth, h: mapContainer.offsetHeight },
                         mapElement: { w: mapElement.offsetWidth, h: mapElement.offsetHeight }
@@ -2107,6 +2155,7 @@ jQuery(document).ready(function($) {
                     
                     // Если карта есть, но элемент имеет нулевые размеры - перерисовываем
                     if (cdekMap && mapElement.offsetWidth === 0) {
+                        
                         setTimeout(() => {
                             if (cdekMap && cdekMap.container) {
                                 cdekMap.container.fitToViewport();
@@ -2133,6 +2182,7 @@ jQuery(document).ready(function($) {
             removeDuplicateTotalElements();
             fixExistingDuplicatedPrices();
         }, 2000);
+        
         
     }
     
@@ -2171,11 +2221,14 @@ jQuery(document).ready(function($) {
         var isChecked = $(this).is(':checked');
         
         
+        
         if (selectedValue && selectedValue.indexOf('cdek_delivery') !== -1 && isChecked) {
+            
             debouncer.debounce('init-cdek', () => initCdekDelivery(), 100, 8);
         } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1 && isChecked) {
             var mapContainer = $('#cdek-map-container');
             if (mapContainer.length > 0) {
+                
                 mapContainer.hide();
                 resetCdekShippingToDefault();
             }
@@ -2186,32 +2239,39 @@ jQuery(document).ready(function($) {
     $(document).on('click', '.wc-block-checkout__shipping-method-option', function() {
         var methodTitle = $(this).find('.wc-block-checkout__shipping-method-option-title').text().trim();
         
+        
         setTimeout(() => {
             var isSelected = $(this).attr('aria-checked') === 'true';
             
+            
             if (methodTitle === 'Доставка' && isSelected) {
+                
                 
                 // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
                 var mapBlock = $('.wp-block-cdek-checkout-map-block');
                 if (mapBlock.length > 0) {
                     mapBlock.show();
                     mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
+                    
                 }
                 
                 // Проверяем состояние карты и переинициализируем если нужно
                 setTimeout(() => {
                     var mapElement = document.getElementById('cdek-map');
                     if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
+                        
                         cdekMap = null;
                         initYandexMap();
                         
                         // Восстанавливаем ПВЗ если они есть
                         if (cdekPoints && cdekPoints.length > 0) {
                             setTimeout(() => {
+                                
                                 displayCdekPoints(cdekPoints);
                             }, 1000);
                         }
                     } else {
+                        
                         // Просто показываем существующую карту
                         if (mapElement) {
                             mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
@@ -2221,10 +2281,12 @@ jQuery(document).ready(function($) {
                 
             } else if (methodTitle === 'Самовывоз' && isSelected) {
                 
+                
                 // Скрываем блок карты
                 var mapBlock = $('.wp-block-cdek-checkout-map-block');
                 if (mapBlock.length > 0) {
                     mapBlock.hide();
+                    
                 }
             }
         }, 100);
@@ -2339,6 +2401,11 @@ jQuery(document).ready(function($) {
     window.currentSearchCity = null;
     
     
+    
+    
+    
+    
+    
             // MutationObserver для отслеживания изменений aria-checked в способах доставки
         const shippingObserver = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
@@ -2349,9 +2416,12 @@ jQuery(document).ready(function($) {
                     var title = titleElement ? titleElement.textContent.trim() : '';
                     
                     
+                    
                     if (title === 'Доставка' && isSelected) {
+                        
                         showMapForDelivery();
                     } else if (isSelected && (title === 'Самовывоз' || title === 'Обсудить доставку с менеджером')) {
+                        
                         hideMapForOtherMethods();
                     }
                 }
@@ -2364,12 +2434,20 @@ jQuery(document).ready(function($) {
             var mapContainer = $('#cdek-map-container');
             var mapElement = $('#cdek-map');
             
+            
+            console.log('📍 Элементы:', {
+                mapBlock: mapBlock.length,
+                mapContainer: mapContainer.length,
+                mapElement: mapElement.length
+            });
+            
             // Показываем блок карты если он существует
             if (mapBlock.length > 0) {
                 mapBlock.show();
                 mapBlock.each(function() {
                     this.style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
                 });
+                
             }
             
             // Показываем контейнер карты
@@ -2377,89 +2455,92 @@ jQuery(document).ready(function($) {
                 mapContainer.show();
                 mapContainer[0].style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
                 
-                // ИСПРАВЛЕНИЕ: Всегда пересоздаём элемент карты для надежности
-                if (mapElement.length === 0) {
-                    mapContainer.html('<div id="cdek-map" style="width: 100%; height: 450px; display: block !important;"></div>');
-                    mapElement = $('#cdek-map'); // Обновляем ссылку
-                }
-            } else {
-                // Если нет контейнера карты, создаём его
-                var targetBlock = mapBlock.length > 0 ? mapBlock : $('.wc-block-components-shipping-rates-control').first();
-                if (targetBlock.length > 0) {
-                    var mapHtml = '<div id="cdek-map-container" style="display: block !important; visibility: visible !important; position: relative !important;"><div id="cdek-map" style="width: 100%; height: 450px; display: block !important;"></div></div>';
-                    targetBlock.after(mapHtml);
-                    mapContainer = $('#cdek-map-container');
-                    mapElement = $('#cdek-map');
-                }
             }
             
-            // ИСПРАВЛЕНИЕ: Всегда переинициализируем карту при переключении
+            // Инициализируем карту если она еще не создана или создаём заново
             setTimeout(() => {
-                // Принудительно обнуляем существующую карту
-                if (cdekMap) {
-                    try {
-                        cdekMap.destroy();
-                    } catch (e) {
-                        // Игнорируем ошибки при удалении
-                    }
+                var needsMapInit = false;
+                
+                if (!cdekMap) {
+                    
+                    needsMapInit = true;
+                } else if (mapElement.length === 0) {
+                    
                     cdekMap = null;
+                    needsMapInit = true;
+                } else if (mapElement[0].offsetWidth === 0 || mapElement[0].offsetHeight === 0) {
+                    
+                    cdekMap = null;
+                    needsMapInit = true;
                 }
                 
-                // Убеждаемся что элемент карты готов
-                mapElement = $('#cdek-map');
-                if (mapElement.length > 0) {
-                    mapElement[0].style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important; position: relative !important;';
+                if (needsMapInit) {
+                    // Убеждаемся что контейнер видим перед инициализацией
+                    if (mapElement.length === 0 && mapContainer.length > 0) {
+                        // Пересоздаём элемент карты если его нет
+                        mapContainer.html('<div id="cdek-map" style="width: 100%; height: 450px; display: block !important;"></div>');
+                    }
                     
-                    // Очищаем содержимое элемента карты
-                    mapElement.empty();
-                    
-                    // Инициализируем новую карту
                     initYandexMap();
                     
-                    // Восстанавливаем ПВЗ с задержкой
+                    // Восстанавливаем ПВЗ если они были найдены ранее
                     if (cdekPoints && cdekPoints.length > 0) {
                         setTimeout(() => {
+                            
                             displayCdekPoints(cdekPoints);
-                        }, 2000); // Увеличиваем задержку для надежности
+                        }, 1500);
+                    }
+                } else {
+                    
+                    
+                    // Убеждаемся что элемент карты видим
+                    if (mapElement.length > 0) {
+                        mapElement[0].style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
+                    }
+                    
+                    // Принудительно перерисовываем карту
+                    if (cdekMap && cdekMap.container) {
+                        try {
+                            cdekMap.container.fitToViewport();
+                            
+                        } catch (e) {
+                            
+                        }
+                    }
+                    
+                    // Восстанавливаем ПВЗ если нужно
+                    if (cdekPoints && cdekPoints.length > 0 && cdekMap) {
+                        setTimeout(() => {
+                            
+                            displayCdekPoints(cdekPoints);
+                        }, 500);
                     }
                 }
-            }, 100);
+            }, 300);
+            
+            // Дополнительная проверка через секунду
+            setTimeout(() => {
+                if (mapElement.length > 0 && (mapElement[0].offsetWidth === 0 || mapElement[0].offsetHeight === 0)) {
+                    
+                    showMapForDelivery();
+                }
+            }, 1000);
         }
         
         function hideMapForOtherMethods() {
             var mapBlock = $('.wp-block-cdek-checkout-map-block');
             var mapContainer = $('#cdek-map-container');
             
-            // ИСПРАВЛЕНИЕ: Не удаляем элементы, а только скрываем их
+            
+            
             if (mapBlock.length > 0) {
-                mapBlock.css({
-                    'display': 'none',
-                    'visibility': 'hidden',
-                    'height': '0',
-                    'overflow': 'hidden'
-                });
+                mapBlock.hide();
+                
             }
             
             if (mapContainer.length > 0) {
-                mapContainer.css({
-                    'display': 'none',
-                    'visibility': 'hidden',
-                    'height': '0',
-                    'overflow': 'hidden'
-                });
-            }
-            
-            // ИСПРАВЛЕНИЕ: Сохраняем ссылку на карту но останавливаем её обновления
-            if (cdekMap) {
-                try {
-                    // Просто скрываем контейнер, не удаляем карту
-                    var mapElement = document.getElementById('cdek-map');
-                    if (mapElement) {
-                        mapElement.style.display = 'none';
-                    }
-                } catch (e) {
-                    // Игнорируем ошибки
-                }
+                mapContainer.hide();
+                
             }
         }
 
@@ -2476,9 +2557,11 @@ jQuery(document).ready(function($) {
             var title = titleElement.text().trim();
             
             
+            
             // Даём время на обновление aria-checked и затем проверяем состояние
             setTimeout(() => {
                 var isSelected = $(this).attr('aria-checked') === 'true';
+                
                 
                 if (title === 'Доставка' && isSelected) {
                     showMapForDelivery();
