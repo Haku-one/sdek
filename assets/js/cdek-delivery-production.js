@@ -1008,7 +1008,8 @@ jQuery(document).ready(function($) {
             timeout: 30000,
             data: {
                 action: 'get_cdek_points',
-                address: 'Россия',
+                address: window.currentSearchCity || 'Россия',
+                city: window.currentSearchCity || '',
                 nonce: cdek_ajax.nonce
             },
             success: function(response) {
@@ -1055,64 +1056,8 @@ jQuery(document).ready(function($) {
             return;
         }
         
-        // Фильтруем пункты по городу
-        var filteredPoints = points.filter(function(point) {
-            // Убираем фильтрацию по типу - показываем все пункты выдачи
-            // if (point.type !== 'PVZ' && point.type) {
-            //     return false;
-            // }
-            
-            if (window.currentSearchCity) {
-                var pointCity = '';
-                
-                // Пытаемся получить город из разных полей
-                if (point.location && point.location.city) {
-                    pointCity = point.location.city.trim();
-                }
-                
-                // Если не нашли в location.city, ищем в address
-                if (!pointCity && point.location && point.location.address) {
-                    var addressParts = point.location.address.split(',');
-                    if (addressParts.length > 0) {
-                        pointCity = addressParts[0].trim();
-                    }
-                }
-                
-                // Если не нашли в address, ищем в name
-                if (!pointCity && point.name && point.name.includes(',')) {
-                    var nameParts = point.name.split(',');
-                    if (nameParts.length >= 2) {
-                        pointCity = nameParts[1].trim();
-                    }
-                }
-                
-                // Если не нашли в name, ищем в полном адресе
-                if (!pointCity && point.address_comment) {
-                    var commentParts = point.address_comment.split(',');
-                    if (commentParts.length > 0) {
-                        pointCity = commentParts[0].trim();
-                    }
-                }
-                
-                if (pointCity) {
-                    pointCity = pointCity.replace(/^(г\.?\s*|город\s+)/i, '').trim();
-                }
-                
-                var searchCityLower = window.currentSearchCity.toLowerCase().trim();
-                var pointCityLower = pointCity.toLowerCase().trim();
-                
-                // Более гибкое сравнение - проверяем вхождение
-                if (pointCityLower && searchCityLower) {
-                    if (pointCityLower !== searchCityLower && 
-                        !pointCityLower.includes(searchCityLower) && 
-                        !searchCityLower.includes(pointCityLower)) {
-                        return false;
-                    }
-                }
-            }
-            
-            return true;
-        });
+        // НЕ ФИЛЬТРУЕМ - API уже возвращает отфильтрованные данные
+        var filteredPoints = points;
         
         // Сортируем по расстоянию
         if (window.currentSearchCoordinates && filteredPoints.length > 0) {
