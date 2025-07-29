@@ -97,14 +97,10 @@ class CdekDeliveryPlugin {
     
     public function customize_checkout_fields($fields) {
         // Убираем ненужные поля для доставки
-        unset($fields['shipping']['shipping_city']);
-        unset($fields['shipping']['shipping_state']);
-        unset($fields['shipping']['shipping_postcode']);
+       
         
         // Убираем поля для биллинга тоже
-        unset($fields['billing']['billing_city']);
-        unset($fields['billing']['billing_state']);
-        unset($fields['billing']['billing_postcode']);
+        
         
         // Меняем метку для поля адреса
         $fields['shipping']['shipping_address_1']['label'] = 'Город доставки';
@@ -116,9 +112,7 @@ class CdekDeliveryPlugin {
     
     public function customize_address_fields($fields) {
         // Убираем ненужные поля из формы адреса
-        unset($fields['city']);
-        unset($fields['state']);
-        unset($fields['postcode']);
+        
         
         // Настраиваем поле адреса
         $fields['address_1']['label'] = 'Город доставки';
@@ -408,33 +402,7 @@ class CdekDeliveryPlugin {
     public function hide_checkout_fields_css() {
         if (is_checkout()) {
             echo '<style>
-                /* Скрываем ненужные поля города, области и индекса */
-                .wc-block-components-address-form__city,
-                .wc-block-components-address-form__state,
-                .wc-block-components-address-form__postcode,
-                #shipping-city,
-                #shipping-state,
-                #shipping-postcode,
-                #billing-city,
-                #billing-state,
-                #billing-postcode,
-                .wc-block-components-text-input:has(#shipping-city),
-                .wc-block-components-text-input:has(#shipping-state),
-                .wc-block-components-text-input:has(#shipping-postcode) {
-                    display: none !important;
-                    visibility: hidden !important;
-                    height: 0 !important;
-                    overflow: hidden !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }
                 
-                /* Скрываем родительские контейнеры */
-                [class*="city"]:not([class*="address"]),
-                [class*="state"]:not([class*="address"]),
-                [class*="postcode"]:not([class*="address"]) {
-                    display: none !important;
-                }
             </style>';
         }
     }
