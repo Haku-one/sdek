@@ -79,14 +79,10 @@ class CdekDeliveryPlugin {
         add_action('woocommerce_loaded', array($this, 'register_rest_fields'));
         add_action('woocommerce_rest_checkout_process_payment', array($this, 'save_cdek_data_from_rest'), 10, 2);
         
-        // Правильные хуки для Store API
-        add_action('woocommerce_blocks_loaded', array($this, 'register_blocks_integration'));
-        
-        // Добавляем поддержку Store API
-        add_action('init', array($this, 'init_store_api_support'));
-        
-        // Загружаем расширение Store API
-        add_action('plugins_loaded', array($this, 'load_store_api_extension'));
+        // Store API отключен для упрощения и стабильности
+        // add_action('woocommerce_blocks_loaded', array($this, 'register_blocks_integration'));
+        // add_action('init', array($this, 'init_store_api_support'));
+        // add_action('plugins_loaded', array($this, 'load_store_api_extension'));
         
         // AJAX для проверки подключения
         add_action('wp_ajax_test_cdek_connection', array($this, 'ajax_test_cdek_connection'));
@@ -771,8 +767,8 @@ class CdekDeliveryPlugin {
         if (class_exists('Automattic\WooCommerce\Blocks\Integrations\IntegrationInterface')) {
             include_once plugin_dir_path(__FILE__) . 'includes/class-wc-blocks-integration.php';
             
-            // Регистрируем интеграцию с блоками
-            add_action('woocommerce_blocks_loaded', array($this, 'register_blocks_integration'));
+            // Интеграция с блоками отключена для упрощения
+            // add_action('woocommerce_blocks_loaded', array($this, 'register_blocks_integration'));
         }
     }
     
@@ -780,53 +776,18 @@ class CdekDeliveryPlugin {
      * Регистрация интеграции с WooCommerce Blocks
      */
     public function register_blocks_integration() {
-        try {
-            if (class_exists('Automattic\WooCommerce\Blocks\Integrations\IntegrationRegistry') && 
-                class_exists('WC_Cdek_Blocks_Integration')) {
-                $container = \Automattic\WooCommerce\Blocks\Package::container();
-                $container->get(\Automattic\WooCommerce\Blocks\Integrations\IntegrationRegistry::class)
-                    ->register(new WC_Cdek_Blocks_Integration());
-                error_log('CDEK: Blocks integration зарегистрирована');
-            } else {
-                error_log('CDEK: Не удалось зарегистрировать blocks integration - отсутствуют классы');
-            }
-        } catch (Exception $e) {
-            error_log('CDEK: Ошибка регистрации blocks integration: ' . $e->getMessage());
-        } catch (Error $e) {
-            error_log('CDEK: Фатальная ошибка при регистрации blocks integration: ' . $e->getMessage());
-        }
+        // Blocks integration отключена для упрощения
+        error_log('CDEK: Blocks integration отключена для упрощения');
+        return;
     }
     
     /**
      * Загружает расширение Store API для СДЭК
      */
     public function load_store_api_extension() {
-        try {
-            // Проверяем, что WooCommerce загружен
-            if (!class_exists('WooCommerce')) {
-                return;
-            }
-            
-            // Подключаем класс расширения Store API
-            if (file_exists(plugin_dir_path(__FILE__) . 'includes/class-cdek-store-api-extension.php')) {
-                require_once plugin_dir_path(__FILE__) . 'includes/class-cdek-store-api-extension.php';
-                
-                // Проверяем что класс загружен успешно
-                if (class_exists('WC_Cdek_Store_API_Extension')) {
-                    WC_Cdek_Store_API_Extension::init();
-                    error_log('CDEK: Store API extension загружен и инициализирован');
-                } else {
-                    error_log('CDEK: Класс WC_Cdek_Store_API_Extension не найден после подключения файла');
-                }
-            } else {
-                error_log('CDEK: Файл Store API extension не найден');
-            }
-            
-        } catch (Exception $e) {
-            error_log('CDEK: Ошибка загрузки Store API extension: ' . $e->getMessage());
-        } catch (Error $e) {
-            error_log('CDEK: Фатальная ошибка при загрузке Store API extension: ' . $e->getMessage());
-        }
+        // Store API отключен для упрощения и стабильности
+        error_log('CDEK: Store API отключен для упрощения');
+        return;
     }
     
     public function add_cdek_info_to_email($order, $sent_to_admin, $plain_text, $email) {
@@ -1136,27 +1097,9 @@ class CdekDeliveryPlugin {
      * Инициализация поддержки Store API
      */
     public function init_store_api_support() {
-        try {
-            error_log('CDEK: Инициализация поддержки Store API');
-            
-            // Проверяем что WooCommerce загружен
-            if (!class_exists('WooCommerce')) {
-                error_log('CDEK: WooCommerce не найден при инициализации Store API');
-                return;
-            }
-            
-            // Проверяем доступность Store API
-            if (class_exists('Automattic\WooCommerce\StoreApi\StoreApi')) {
-                error_log('CDEK: Store API доступен');
-            } else {
-                error_log('CDEK: Store API недоступен');
-            }
-            
-        } catch (Exception $e) {
-            error_log('CDEK: Ошибка инициализации Store API: ' . $e->getMessage());
-        } catch (Error $e) {
-            error_log('CDEK: Фатальная ошибка при инициализации Store API: ' . $e->getMessage());
-        }
+        // Store API support отключен для упрощения
+        error_log('CDEK: Store API support отключен для упрощения');
+        return;
     }
     
     /**
