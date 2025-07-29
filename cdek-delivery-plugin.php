@@ -3,7 +3,7 @@
  * Plugin Name: СДЭК Доставка для WooCommerce
  * Plugin URI: https://yoursite.com
  * Description: Плагин для интеграции доставки СДЭК с упрощенной формой адреса и картой пунктов выдачи
- * Version: 2.7.0
+ * Version: 2.8.0
  * Author: Your Name
  * Requires at least: 5.0
  * Tested up to: 6.4
@@ -24,7 +24,7 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 
 define('CDEK_DELIVERY_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CDEK_DELIVERY_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('CDEK_DELIVERY_VERSION', '2.7.0');
+define('CDEK_DELIVERY_VERSION', '2.8.0');
 
 // Основной класс плагина
 class CdekDeliveryPlugin {

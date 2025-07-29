@@ -727,6 +727,16 @@ jQuery(document).ready(function($) {
                 nonce: cdek_ajax.nonce
             },
             success: function(response) {
+                console.log('=== ПОЛНЫЙ ОТВЕТ СЕРВЕРА ===');
+                console.log('response:', response);
+                console.log('response.success:', response ? response.success : 'undefined');
+                console.log('response.data:', response ? response.data : 'undefined');
+                if (response && response.data) {
+                    console.log('response.data.message:', response.data.message);
+                    console.log('response.data.delivery_sum:', response.data.delivery_sum);
+                }
+                console.log('=== КОНЕЦ ОТВЕТА ===');
+                
                 if (response.success && response.data && response.data.delivery_sum) {
                     var deliveryCost = parseInt(response.data.delivery_sum);
                     
