@@ -52,8 +52,10 @@ class CdekDeliveryPlugin {
         // Регистрация настроек плагина
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
-        // Сохранение данных о выбранном пункте выдачи
+        // Сохранение данных о выбранном пункте выдачи - МНОЖЕСТВЕННЫЕ ХУКИ
         add_action('woocommerce_checkout_update_order_meta', array($this, 'save_cdek_point_data'));
+        add_action('woocommerce_store_api_checkout_update_order_meta', array($this, 'save_cdek_point_data'));
+        add_action('woocommerce_blocks_checkout_update_order_meta', array($this, 'save_cdek_point_data'));
         
         // Отображение информации о пункте выдачи в админке
         add_action('woocommerce_admin_order_data_after_shipping_address', array($this, 'display_cdek_point_in_admin'));
@@ -66,6 +68,10 @@ class CdekDeliveryPlugin {
         
         // НОВОЕ: Обновляем стоимость доставки в заказе
         add_action('woocommerce_checkout_update_order_meta', array($this, 'update_order_shipping_cost'), 20, 1);
+        
+        // НОВОЕ: Дополнительные хуки для блоков WooCommerce
+        add_action('rest_api_init', array($this, 'register_rest_fields'));
+        add_action('woocommerce_rest_checkout_process_payment', array($this, 'save_cdek_data_from_rest'), 10, 2);
         
         // AJAX для проверки подключения
         add_action('wp_ajax_test_cdek_connection', array($this, 'ajax_test_cdek_connection'));
@@ -993,7 +999,7 @@ class CdekAPI {
             $params = array(
                 'type' => 'PVZ',
                 'country_code' => 'RU',
-                'size' => isset($strategy['broad_search']) ? '1000' : '500'
+                'size' => isset($strategy['broad_search']) ? '200' : '100'
             );
             
             // Добавляем ограничения по весу и габаритам если указаны

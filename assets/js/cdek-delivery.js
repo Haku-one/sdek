@@ -1589,8 +1589,7 @@ jQuery(document).ready(function($) {
             });
         }
         
-        // ИСПРАВЛЕНИЕ: Ограничиваем количество пунктов для лучшей производительности
-        var maxPoints = window.innerWidth <= 768 ? 30 : 50; // Меньше для мобильных
+        var maxPoints = window.innerWidth <= 768 ? 100 : 200;
         var pointsToShow = filteredPoints.slice(0, maxPoints);
         
         var pointsInfo = '';
