@@ -1220,6 +1220,20 @@ jQuery(document).ready(function($) {
         // ИСПРАВЛЕНИЕ: Принудительно делаем контейнер видимым
         mapContainer.style.cssText = 'display: block !important; width: 100% !important; height: 450px !important; visibility: visible !important; position: relative !important;';
         
+        // ИСПРАВЛЕНИЕ: Принудительно делаем родительские контейнеры видимыми
+        var parentContainer = document.getElementById('cdek-map-container');
+        if (parentContainer) {
+            parentContainer.style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
+            console.log('🗺️ Принудительно показываем родительский контейнер');
+        }
+        
+        // Проверяем блок wp-block-cdek-checkout-map-block
+        var wpBlock = document.querySelector('.wp-block-cdek-checkout-map-block');
+        if (wpBlock) {
+            wpBlock.style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
+            console.log('🗺️ Принудительно показываем wp-block-cdek-checkout-map-block');
+        }
+        
         // Ждем, пока контейнер получит размеры
         var attempts = 0;
         var checkSize = function() {
@@ -1238,6 +1252,14 @@ jQuery(document).ready(function($) {
                     // Добавляем обработчик готовности карты
                     cdekMap.events.add('ready', function() {
                         console.log('✅ Карта готова к использованию');
+                        
+                        // ИСПРАВЛЕНИЕ: Принудительно перерисовываем карту
+                        setTimeout(function() {
+                            if (cdekMap && cdekMap.container) {
+                                cdekMap.container.fitToViewport();
+                                console.log('🔄 Карта перерисована');
+                            }
+                        }, 100);
                     });
                     
                 } catch (error) {
@@ -1251,6 +1273,13 @@ jQuery(document).ready(function($) {
                 setTimeout(checkSize, 100);
             } else {
                 console.error('❌ Не удалось получить размеры контейнера карты после 10 попыток');
+                console.log('🔍 Отладка контейнера:', {
+                    container: !!mapContainer,
+                    width: mapContainer ? mapContainer.offsetWidth : 'N/A',
+                    height: mapContainer ? mapContainer.offsetHeight : 'N/A',
+                    display: mapContainer ? getComputedStyle(mapContainer).display : 'N/A',
+                    visibility: mapContainer ? getComputedStyle(mapContainer).visibility : 'N/A'
+                });
             }
         };
         
@@ -1942,30 +1971,64 @@ jQuery(document).ready(function($) {
                 </div>
             `;
             
+            // ИСПРАВЛЕНИЕ: Улучшенный поиск и вставка блока карты
             var mapBlock = $('.wp-block-cdek-checkout-map-block');
             var insertTarget = null;
             
+            console.log('🗺️ Поиск блока карты. Найдено wp-block-cdek-checkout-map-block:', mapBlock.length);
+            
             if (mapBlock.length > 0) {
+                console.log('✅ Найден блок wp-block-cdek-checkout-map-block, вставляем карту');
                 insertTarget = mapBlock;
                 insertTarget.html(mapHtml);
             } else {
+                console.log('🔍 Блок wp-block-cdek-checkout-map-block не найден, ищем альтернативные места');
+                
+                // Поиск альтернативных мест для вставки карты
                 var addressForm = $('.wc-block-components-address-form');
                 var shippingBlock = $('.wp-block-woocommerce-checkout-shipping-address-block');
                 var shippingControl = $('.wc-block-components-shipping-rates-control');
+                var checkoutMain = $('.wp-block-woocommerce-checkout');
                 
-                insertTarget = addressForm.length ? addressForm : 
-                    shippingBlock.length ? shippingBlock :
-                    shippingControl.first();
-                    
-                if (insertTarget.length > 0) {
+                console.log('🔍 Альтернативные места:', {
+                    addressForm: addressForm.length,
+                    shippingBlock: shippingBlock.length, 
+                    shippingControl: shippingControl.length,
+                    checkoutMain: checkoutMain.length
+                });
+                
+                if (shippingControl.length > 0) {
+                    console.log('✅ Вставляем карту после shipping-rates-control');
+                    insertTarget = shippingControl.first();
                     insertTarget.after(mapHtml);
+                } else if (addressForm.length > 0) {
+                    console.log('✅ Вставляем карту после address-form');
+                    insertTarget = addressForm.first();
+                    insertTarget.after(mapHtml);
+                } else if (shippingBlock.length > 0) {
+                    console.log('✅ Вставляем карту после shipping-address-block');
+                    insertTarget = shippingBlock.first();
+                    insertTarget.after(mapHtml);
+                } else if (checkoutMain.length > 0) {
+                    console.log('✅ Вставляем карту в checkout main');
+                    insertTarget = checkoutMain.first();
+                    insertTarget.append(mapHtml);
+                } else {
+                    console.error('❌ Не найдено подходящее место для вставки карты');
+                    // Принудительная вставка в body как последний шанс
+                    $('body').append(mapHtml);
                 }
             }
         }
         
         $('#cdek-map-container').show();
         
-        setTimeout(() => initYandexMap(), 500);
+        // ИСПРАВЛЕНИЕ: Даем больше времени на отображение контейнера
+        setTimeout(() => {
+            console.log('🗺️ Запуск инициализации карты через 500мс');
+            initYandexMap();
+        }, 500);
+        
         setTimeout(() => initAddressAutocomplete(), 1000);
         
         var currentAddress = $('#shipping-address_1').val();

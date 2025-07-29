@@ -579,20 +579,31 @@ class CdekAPI {
         $city_for_api = !empty($city) ? $city : $this->extract_city_from_address($address);
         error_log('СДЭК API: Ищем пункты для города: ' . ($city_for_api ? $city_for_api : 'все города России'));
         
+        // ИСПРАВЛЕНИЕ: Проверяем длину названия города и не ищем для коротких названий
+        if (!empty($city_for_api) && mb_strlen(trim($city_for_api)) < 3) {
+            error_log('СДЭК API: Название города слишком короткое: "' . $city_for_api . '", пропускаем поиск');
+            return array();
+        }
+        
         // ИСПРАВЛЕНИЕ: Получаем city_code более надежным способом
         $city_code = null;
         if (!empty($city_for_api)) {
-            $city_code = $this->get_city_code($city_for_api, $token);
-            if ($city_code) {
-                error_log('СДЭК API: Найден city_code для города "' . $city_for_api . '": ' . $city_code);
-            } else {
-                error_log('СДЭК API: Не удалось найти city_code для города "' . $city_for_api . '". Попробуем альтернативные методы поиска.');
-                
-                // Альтернативный поиск по части названия города
-                $city_code = $this->get_city_code_fuzzy($city_for_api, $token);
+            // Пропускаем поиск city_code для частичных названий (менее 4 букв)
+            if (mb_strlen(trim($city_for_api)) >= 4) {
+                $city_code = $this->get_city_code($city_for_api, $token);
                 if ($city_code) {
-                    error_log('СДЭК API: Найден city_code альтернативным поиском: ' . $city_code);
+                    error_log('СДЭК API: Найден city_code для города "' . $city_for_api . '": ' . $city_code);
+                } else {
+                    error_log('СДЭК API: Не удалось найти city_code для города "' . $city_for_api . '". Попробуем альтернативные методы поиска.');
+                    
+                    // Альтернативный поиск по части названия города
+                    $city_code = $this->get_city_code_fuzzy($city_for_api, $token);
+                    if ($city_code) {
+                        error_log('СДЭК API: Найден city_code альтернативным поиском: ' . $city_code);
+                    }
                 }
+            } else {
+                error_log('СДЭК API: Название города слишком короткое для поиска city_code: "' . $city_for_api . '"');
             }
         }
         
@@ -612,10 +623,14 @@ class CdekAPI {
         if ($city_code) {
             $params['city_code'] = $city_code;
             error_log('СДЭК API: Применяем фильтр city_code: ' . $city_code);
-        } else if (!empty($city_for_api)) {
-            // Если city_code не найден, используем фильтр по названию города
+        } else if (!empty($city_for_api) && mb_strlen(trim($city_for_api)) >= 4) {
+            // Если city_code не найден И название достаточно длинное, используем фильтр по названию города
             $params['city'] = $city_for_api;
             error_log('СДЭК API: Применяем фильтр city: ' . $city_for_api);
+        } else {
+            // Для коротких названий не применяем фильтры, возвращаем пустой результат
+            error_log('СДЭК API: Пропускаем запрос для короткого названия города: ' . $city_for_api);
+            return array();
         }
         
         // Строим URL с параметрами для GET запроса
@@ -670,6 +685,18 @@ class CdekAPI {
                 
                 if ($city_for_api && strtolower($city_for_api) === 'москва') {
                     error_log('🏛️ СДЭК API: Отладка Москвы - всего пунктов: ' . count($data));
+                }
+                
+                if ($city_for_api && (strtolower($city_for_api) === 'тюмень' || stripos($city_for_api, 'тюмен') !== false)) {
+                    error_log('🏙️ СДЭК API: Отладка Тюмени - всего пунктов: ' . count($data));
+                    // Ищем ПВЗ с адресом Зелинского
+                    $zelinsky_points = array_filter($data, function($point) {
+                        if (isset($point['location']['address'])) {
+                            return stripos($point['location']['address'], 'зелинск') !== false;
+                        }
+                        return false;
+                    });
+                    error_log('🎯 СДЭК API: ПВЗ с адресом Зелинского: ' . count($zelinsky_points));
                 }
                 
                 return $data;
