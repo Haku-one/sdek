@@ -1463,6 +1463,75 @@ jQuery(document).ready(function($) {
             }
         }
         
+        // Дополнительная отладка для конкретных городов
+        if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('тюмень')) {
+            console.log('🎯 ОТЛАДКА ТЮМЕНИ:');
+            var tyumenPvz = points.filter(function(p) {
+                var cityMatch = false;
+                var hasZelinsky = false;
+                
+                // Проверяем город
+                if (p.location && p.location.city) {
+                    cityMatch = p.location.city.toLowerCase().includes('тюмень');
+                }
+                if (!cityMatch && p.name) {
+                    cityMatch = p.name.toLowerCase().includes('тюмень');
+                }
+                
+                // Проверяем адрес Зелинского
+                if (p.location && p.location.address) {
+                    hasZelinsky = p.location.address.toLowerCase().includes('зелинск');
+                }
+                if (!hasZelinsky && p.address_comment) {
+                    hasZelinsky = p.address_comment.toLowerCase().includes('зелинск');
+                }
+                if (!hasZelinsky && p.name) {
+                    hasZelinsky = p.name.toLowerCase().includes('зелинск');
+                }
+                
+                return cityMatch && hasZelinsky;
+            });
+            
+            console.log('🎯 ПВЗ в Тюмени с адресом Зелинского:', tyumenPvz.length);
+            if (tyumenPvz.length > 0) {
+                console.log('🎯 Найденные ПВЗ Зелинского:', tyumenPvz);
+            } else {
+                console.log('❌ ПВЗ по адресу Зелинского в Тюмени НЕ НАЙДЕН');
+                
+                // Показываем все ПВЗ Тюмени для анализа
+                var allTyumenPvz = points.filter(function(p) {
+                    if (p.location && p.location.city && p.location.city.toLowerCase().includes('тюмень')) return true;
+                    if (p.name && p.name.toLowerCase().includes('тюмень')) return true;
+                    return false;
+                });
+                console.log('🔍 Все ПВЗ Тюмени для анализа (' + allTyumenPvz.length + '):', allTyumenPvz.slice(0, 5));
+            }
+        }
+        
+        // Аналогичная отладка для Москвы
+        if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('москва')) {
+            console.log('🏛️ ОТЛАДКА МОСКВЫ:');
+            var moscowPvz = filteredPoints.length;
+            console.log('🏛️ ПВЗ в Москве после фильтрации:', moscowPvz);
+            console.log('🏛️ Ожидается: ~414 пунктов');
+            
+            if (moscowPvz < 400) {
+                console.warn('⚠️ В Москве найдено меньше ПВЗ чем ожидается!');
+            }
+        }
+        
+        // Аналогичная отладка для Саратова
+        if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('саратов')) {
+            console.log('🏫 ОТЛАДКА САРАТОВА:');
+            var saratovPvz = filteredPoints.length;
+            console.log('🏫 ПВЗ в Саратове после фильтрации:', saratovPvz);
+            console.log('🏫 Ожидается: ~29 пунктов');
+            
+            if (saratovPvz < 25) {
+                console.warn('⚠️ В Саратове найдено меньше ПВЗ чем ожидается!');
+            }
+        }
+        
         if (window.currentSearchCoordinates && filteredPoints.length > 0) {
             filteredPoints.sort(function(a, b) {
                 var distA = calculateDistance(
@@ -2033,12 +2102,49 @@ jQuery(document).ready(function($) {
     startPriceMonitoring();
     
     $(document).on('change', 'input[name="shipping_method[0]"], input[name*="radio-control"], input[value*="cdek_delivery"]', function() {
-        if ($(this).val().indexOf('cdek_delivery') !== -1) {
+        var selectedValue = $(this).val();
+        var isChecked = $(this).is(':checked');
+        
+        console.log('🔄 Переключение способа доставки:', selectedValue, 'Выбран:', isChecked);
+        
+        if (selectedValue && selectedValue.indexOf('cdek_delivery') !== -1 && isChecked) {
+            console.log('✅ Выбрана доставка CDEK - показываем карту');
             debouncer.debounce('init-cdek', () => initCdekDelivery(), 100, 8);
-        } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1) {
-            $('#cdek-map-container').hide();
-            resetCdekShippingToDefault();
+        } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1 && isChecked) {
+            var mapContainer = $('#cdek-map-container');
+            if (mapContainer.length > 0) {
+                console.log('🙈 Выбран другой способ доставки - скрываем карту CDEK');
+                mapContainer.hide();
+                resetCdekShippingToDefault();
+            }
         }
+    });
+    
+    // Обработчик для блоков WooCommerce (новая система оформления)
+    $(document).on('click', '.wc-block-checkout__shipping-method-option', function() {
+        var titleElement = $(this).find('.wc-block-checkout__shipping-method-option-title');
+        var title = titleElement.text().trim();
+        var isSelected = $(this).hasClass('wc-block-checkout__shipping-method-option--selected');
+        
+        console.log('🔄 Клик по способу доставки в блоке:', title, 'Выбран:', isSelected);
+        
+        setTimeout(() => {
+            var mapContainer = $('#cdek-map-container');
+            
+            if (title.includes('СДЭК') || title.includes('Выберите пункт выдачи') || title.includes('Доставка')) {
+                console.log('✅ Выбрана доставка CDEK через блок - показываем карту');
+                if (mapContainer.length > 0) {
+                    mapContainer.show();
+                }
+                debouncer.debounce('init-cdek-block', () => initCdekDelivery(), 200, 8);
+            } else {
+                console.log('🙈 Выбран другой способ доставки через блок - скрываем карту CDEK');
+                if (mapContainer.length > 0) {
+                    mapContainer.hide();
+                    resetCdekShippingToDefault();
+                }
+            }
+        }, 100);
     });
     
     $(document).on('click', 'input[value*="cdek_delivery"]', function() {

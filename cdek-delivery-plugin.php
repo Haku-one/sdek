@@ -585,9 +585,13 @@ class CdekAPI {
             'have_cash' => 'true',
             'have_cashless' => 'true',
             'is_handout' => 'true',
+            'is_reception' => 'true', // Добавляем прием посылок
             'country_code' => 'RU', // Добавляем код страны для России
             'size' => 5000, // Максимальное количество результатов на страницу
-            'page' => 0 // Первая страница
+            'page' => 0, // Первая страница
+            'cash_allowed' => 'true', // Разрешена оплата наличными
+            'card_allowed' => 'true', // Разрешена оплата картой
+            'work_time' => null // Без ограничения по времени работы
         );
         
         // Добавляем город только если он указан
@@ -619,6 +623,43 @@ class CdekAPI {
                 // Проверяем различные форматы ответа СДЭК API
                 if (isset($body['entity']) && is_array($body['entity'])) {
                     error_log('СДЭК API: ✅ Найдено пунктов в entity: ' . count($body['entity']));
+                    
+                    // Детальная отладка для конкретных городов
+                    if ($city && strtolower($city) === 'тюмень') {
+                        error_log('🎯 СДЭК API: Отладка Тюмени - всего пунктов от API: ' . count($body['entity']));
+                        
+                        $tyumen_zelinsky = array_filter($body['entity'], function($point) {
+                            $has_tyumen = false;
+                            $has_zelinsky = false;
+                            
+                            // Проверяем Тюмень
+                            if (isset($point['location']['city']) && stripos($point['location']['city'], 'тюмень') !== false) $has_tyumen = true;
+                            if (isset($point['name']) && stripos($point['name'], 'тюмень') !== false) $has_tyumen = true;
+                            
+                            // Проверяем Зелинского
+                            if (isset($point['location']['address']) && stripos($point['location']['address'], 'зелинск') !== false) $has_zelinsky = true;
+                            if (isset($point['address_comment']) && stripos($point['address_comment'], 'зелинск') !== false) $has_zelinsky = true;
+                            if (isset($point['name']) && stripos($point['name'], 'зелинск') !== false) $has_zelinsky = true;
+                            
+                            return $has_tyumen && $has_zelinsky;
+                        });
+                        
+                        error_log('🎯 СДЭК API: ПВЗ Тюмени с адресом Зелинского найдено: ' . count($tyumen_zelinsky));
+                        if (count($tyumen_zelinsky) > 0) {
+                            error_log('🎯 СДЭК API: Найденные ПВЗ Зелинского: ' . print_r($tyumen_zelinsky, true));
+                        }
+                    }
+                    
+                    if ($city && strtolower($city) === 'москва') {
+                        error_log('🏛️ СДЭК API: Отладка Москвы - всего пунктов от API: ' . count($body['entity']));
+                        error_log('🏛️ СДЭК API: Ожидается: ~414 пунктов');
+                    }
+                    
+                    if ($city && strtolower($city) === 'саратов') {
+                        error_log('🏫 СДЭК API: Отладка Саратова - всего пунктов от API: ' . count($body['entity']));
+                        error_log('🏫 СДЭК API: Ожидается: ~29 пунктов');
+                    }
+                    
                     return $body['entity'];
                 } elseif (is_array($body) && !empty($body)) {
                     // Если ответ - массив пунктов напрямую

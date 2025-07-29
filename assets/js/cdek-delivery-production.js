@@ -1057,21 +1057,40 @@ jQuery(document).ready(function($) {
         
         // Фильтруем пункты по городу
         var filteredPoints = points.filter(function(point) {
-            if (point.type !== 'PVZ' && point.type) {
-                return false;
-            }
+            // Убираем фильтрацию по типу - показываем все пункты выдачи
+            // if (point.type !== 'PVZ' && point.type) {
+            //     return false;
+            // }
             
             if (window.currentSearchCity) {
                 var pointCity = '';
                 
+                // Пытаемся получить город из разных полей
                 if (point.location && point.location.city) {
                     pointCity = point.location.city.trim();
                 }
                 
+                // Если не нашли в location.city, ищем в address
+                if (!pointCity && point.location && point.location.address) {
+                    var addressParts = point.location.address.split(',');
+                    if (addressParts.length > 0) {
+                        pointCity = addressParts[0].trim();
+                    }
+                }
+                
+                // Если не нашли в address, ищем в name
                 if (!pointCity && point.name && point.name.includes(',')) {
                     var nameParts = point.name.split(',');
                     if (nameParts.length >= 2) {
                         pointCity = nameParts[1].trim();
+                    }
+                }
+                
+                // Если не нашли в name, ищем в полном адресе
+                if (!pointCity && point.address_comment) {
+                    var commentParts = point.address_comment.split(',');
+                    if (commentParts.length > 0) {
+                        pointCity = commentParts[0].trim();
                     }
                 }
                 
@@ -1082,8 +1101,13 @@ jQuery(document).ready(function($) {
                 var searchCityLower = window.currentSearchCity.toLowerCase().trim();
                 var pointCityLower = pointCity.toLowerCase().trim();
                 
-                if (pointCityLower !== searchCityLower) {
-                    return false;
+                // Более гибкое сравнение - проверяем вхождение
+                if (pointCityLower && searchCityLower) {
+                    if (pointCityLower !== searchCityLower && 
+                        !pointCityLower.includes(searchCityLower) && 
+                        !searchCityLower.includes(pointCityLower)) {
+                        return false;
+                    }
                 }
             }
             
@@ -1765,14 +1789,51 @@ jQuery(document).ready(function($) {
     
     // Инициализация при выборе доставки СДЭК
     $(document).on('change', 'input[name="shipping_method[0]"], input[name*="radio-control"], input[value*="cdek_delivery"]', function() {
-        if ($(this).val().indexOf('cdek_delivery') !== -1) {
+        var selectedValue = $(this).val();
+        var isChecked = $(this).is(':checked');
+        
+        console.log('🔄 Переключение способа доставки:', selectedValue, 'Выбран:', isChecked);
+        
+        if (selectedValue && selectedValue.indexOf('cdek_delivery') !== -1 && isChecked) {
+            console.log('✅ Выбрана доставка CDEK - показываем карту');
             setTimeout(function() {
                 initCdekDelivery();
             }, 100);
-        } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1) {
-            hideCdekMap();
-            resetCdekShippingToDefault();
+        } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1 && isChecked) {
+            var mapContainer = $('#cdek-map-container');
+            if (mapContainer.length > 0) {
+                console.log('🙈 Выбран другой способ доставки - скрываем карту CDEK');
+                hideCdekMap();
+                resetCdekShippingToDefault();
+            }
         }
+    });
+    
+    // Обработчик для блоков WooCommerce (новая система оформления)
+    $(document).on('click', '.wc-block-checkout__shipping-method-option', function() {
+        var titleElement = $(this).find('.wc-block-checkout__shipping-method-option-title');
+        var title = titleElement.text().trim();
+        var isSelected = $(this).hasClass('wc-block-checkout__shipping-method-option--selected');
+        
+        console.log('🔄 Клик по способу доставки в блоке:', title, 'Выбран:', isSelected);
+        
+        setTimeout(function() {
+            var mapContainer = $('#cdek-map-container');
+            
+            if (title.includes('СДЭК') || title.includes('Выберите пункт выдачи') || title.includes('Доставка')) {
+                console.log('✅ Выбрана доставка CDEK через блок - показываем карту');
+                if (mapContainer.length > 0) {
+                    mapContainer.show();
+                }
+                initCdekDelivery();
+            } else {
+                console.log('🙈 Выбран другой способ доставки через блок - скрываем карту CDEK');
+                if (mapContainer.length > 0) {
+                    hideCdekMap();
+                    resetCdekShippingToDefault();
+                }
+            }
+        }, 100);
     });
     
     // Дополнительная инициализация для блоков WooCommerce
