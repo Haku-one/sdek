@@ -3,7 +3,7 @@
  * Plugin Name: СДЭК Доставка для WooCommerce
  * Plugin URI: https://yoursite.com
  * Description: Плагин для интеграции доставки СДЭК с упрощенной формой адреса и картой пунктов выдачи
- * Version: 2.6.0
+ * Version: 2.6.2
  * Author: Your Name
  * Requires at least: 5.0
  * Tested up to: 6.4
@@ -24,7 +24,7 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 
 define('CDEK_DELIVERY_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CDEK_DELIVERY_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('CDEK_DELIVERY_VERSION', '2.6.0');
+define('CDEK_DELIVERY_VERSION', '2.6.2');
 
 // Основной класс плагина
 class CdekDeliveryPlugin {
@@ -85,8 +85,8 @@ class CdekDeliveryPlugin {
         if (is_checkout()) {
             wp_enqueue_script('yandex-maps', 'https://api-maps.yandex.ru/2.1/?apikey=4020b4d5-1d96-476c-a10e-8ab18f0f3702&lang=ru_RU', array(), null, true);
             
-            wp_enqueue_script('cdek-delivery-js', CDEK_DELIVERY_PLUGIN_URL . 'assets/js/cdek-delivery.js', array('jquery', 'yandex-maps'), '2.6.1', true);
-            wp_enqueue_style('cdek-delivery-css', CDEK_DELIVERY_PLUGIN_URL . 'assets/css/cdek-delivery.css', array(), '2.6.1');
+            wp_enqueue_script('cdek-delivery-js', CDEK_DELIVERY_PLUGIN_URL . 'assets/js/cdek-delivery.js', array('jquery', 'yandex-maps'), '2.6.2', true);
+            wp_enqueue_style('cdek-delivery-css', CDEK_DELIVERY_PLUGIN_URL . 'assets/css/cdek-delivery.css', array(), '2.6.2');
             
             wp_localize_script('cdek-delivery-js', 'cdek_ajax', array(
                 'ajax_url' => admin_url('admin-ajax.php'),

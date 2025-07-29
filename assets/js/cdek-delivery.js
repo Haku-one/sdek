@@ -1422,9 +1422,9 @@ jQuery(document).ready(function($) {
         
         var filteredPoints = points; // НЕ ФИЛЬТРУЕМ - API уже возвращает отфильтрованные данные
         
-        console.log('🔍 Результат API фильтрации:');
+        console.log('🔍 Результат API фильтрации (версия 2.6.2):');
         console.log('- Всего получено от API для города "' + window.currentSearchCity + '":', points.length);
-        console.log('- Отображаем все полученные пункты:', filteredPoints.length);
+        console.log('- Отображаем все полученные пункты (БЕЗ клиентской фильтрации):', filteredPoints.length);
         
         // Сортируем по расстоянию если есть координаты
         if (window.currentSearchCoordinates && filteredPoints.length > 0) {
@@ -2208,7 +2208,7 @@ jQuery(document).ready(function($) {
     window.lastSelectedPointCode = null;
     window.currentSearchCity = null;
     
-    console.log('🚀 СДЭК Delivery Fixed v2.1 загружен');
+    console.log('🚀 СДЭК Delivery Fixed v2.6.2 загружен');
     console.log('✅ Исправления: умный поиск, индикаторы загрузки, производительность');
     console.log('🔍 Предотвращение повторных поисков');
     console.log('🏙️ Поддержка 1000+ городов России');
