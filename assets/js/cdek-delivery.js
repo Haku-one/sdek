@@ -723,10 +723,23 @@ jQuery(document).ready(function($) {
             return;
         }
         
+        console.log('🎯 СДЭК JS: =================== НАЧАЛО РАСЧЕТА ===================');
         console.log('🎯 СДЭК JS: Начинаем расчет стоимости для пункта:', point.code);
         console.log('🎯 СДЭК JS: Данные пункта:', point);
         console.log('🎯 СДЭК JS: Данные корзины:', cartData);
         console.log('🎯 СДЭК JS: САРАТОВ ЖЕСТКО ЗАФИКСИРОВАН В PHP!');
+        console.log('🎯 СДЭК JS: cdek_ajax.ajax_url:', cdek_ajax.ajax_url);
+        console.log('🎯 СДЭК JS: cdek_ajax.nonce:', cdek_ajax.nonce);
+        console.log('🎯 СДЭК JS: Параметры AJAX запроса:');
+        console.log('🎯 СДЭК JS: - action: calculate_cdek_delivery_cost');
+        console.log('🎯 СДЭК JS: - point_code:', point.code);
+        console.log('🎯 СДЭК JS: - point_data:', JSON.stringify(point));
+        console.log('🎯 СДЭК JS: - cart_weight:', cartData.weight);
+        console.log('🎯 СДЭК JS: - cart_dimensions:', JSON.stringify(cartData.dimensions));
+        console.log('🎯 СДЭК JS: - cart_value:', cartData.value);
+        console.log('🎯 СДЭК JS: - has_real_dimensions:', cartData.hasRealDimensions ? 1 : 0);
+        console.log('🎯 СДЭК JS: - packages_count:', cartData.packagesCount || 1);
+        console.log('🎯 СДЭК JS: - nonce:', cdek_ajax.nonce || '');
         
         $.ajax({
             url: cdek_ajax.ajax_url,
@@ -748,7 +761,23 @@ jQuery(document).ready(function($) {
                 console.log('📤 СДЭК JS: Отправляем AJAX запрос на расчет стоимости...');
             },
             success: function(response) {
+                console.log('📥 СДЭК JS: =================== ПОЛНЫЙ АНАЛИЗ ОТВЕТА ===================');
                 console.log('📥 СДЭК JS: Получен ответ от сервера:', response);
+                console.log('📥 СДЭК JS: Тип ответа:', typeof response);
+                console.log('📥 СДЭК JS: response.success:', response ? response.success : 'response пустой');
+                console.log('📥 СДЭК JS: response.data:', response ? response.data : 'response пустой');
+                
+                if (response && response.data) {
+                    console.log('📥 СДЭК JS: response.data.message:', response.data.message);
+                    console.log('📥 СДЭК JS: response.data.delivery_sum:', response.data.delivery_sum);
+                    console.log('📥 СДЭК JS: response.data.api_response:', response.data.api_response);
+                    
+                    if (response.data.debug_info) {
+                        console.log('🔍 СДЭК JS: =================== DEBUG INFO ===================');
+                        console.log('🔍 СДЭК JS: debug_info:', response.data.debug_info);
+                        console.log('🔍 СДЭК JS: debug_info (JSON):', JSON.stringify(response.data.debug_info, null, 2));
+                    }
+                }
                 
                 if (response && response.success && response.data && response.data.delivery_sum) {
                     console.log('✅ СДЭК JS: Успешный расчет! Стоимость:', response.data.delivery_sum);
@@ -773,27 +802,75 @@ jQuery(document).ready(function($) {
                     
                     if (callback) callback(deliveryCost);
                 } else if (!response.success) {
+                    console.error('❌ СДЭК JS: =================== ПОЛНЫЙ АНАЛИЗ ОШИБКИ ===================');
                     console.error('❌ СДЭК JS: API вернул ошибку!');
-                    console.error('❌ СДЭК JS: Детали ошибки:', response.data);
-                    console.error('❌ СДЭК JS: Сообщение:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    console.error('❌ СДЭК JS: response.success:', response.success);
+                    console.error('❌ СДЭК JS: response.data тип:', typeof response.data);
+                    console.error('❌ СДЭК JS: response.data:', response.data);
+                    
+                    if (response.data) {
+                        console.error('❌ СДЭК JS: response.data.message:', response.data.message);
+                        console.error('❌ СДЭК JS: response.data.api_response:', response.data.api_response);
+                        
+                        if (response.data.debug_info) {
+                            console.error('💥 СДЭК JS: =================== DEBUG_INFO ДЕТАЛЬНО ===================');
+                            console.error('💥 СДЭК JS: debug_info полностью:', response.data.debug_info);
+                            
+                            // Детально каждое поле
+                            Object.keys(response.data.debug_info).forEach(function(key) {
+                                console.error('💥 СДЭК JS: debug_info.' + key + ':', response.data.debug_info[key]);
+                                
+                                // Если это объект или массив - показываем его содержимое
+                                if (typeof response.data.debug_info[key] === 'object' && response.data.debug_info[key] !== null) {
+                                    console.error('💥 СДЭК JS: debug_info.' + key + ' (JSON):', JSON.stringify(response.data.debug_info[key], null, 2));
+                                }
+                            });
+                        }
+                        
+                        if (response.data.api_response !== false && response.data.api_response) {
+                            console.error('💥 СДЭК JS: =================== API_RESPONSE ДЕТАЛЬНО ===================');
+                            console.error('💥 СДЭК JS: api_response:', response.data.api_response);
+                            console.error('💥 СДЭК JS: api_response (JSON):', JSON.stringify(response.data.api_response, null, 2));
+                        }
+                    }
+                    
                     console.error('❌ СДЭК JS: Полный ответ:', response);
+                    console.error('❌ СДЭК JS: Полный ответ (JSON):', JSON.stringify(response, null, 2));
                     
                     // Показываем ошибку пользователю вместо fallback
                     if (callback) callback(null);
                 } else {
+                    console.error('❌ СДЭК JS: =================== НЕКОРРЕКТНЫЙ ОТВЕТ ===================');
                     console.error('❌ СДЭК JS: Некорректный ответ от API СДЭК');
-                    console.error('❌ СДЭК JS: Полный ответ:', response);
+                    console.error('❌ СДЭК JS: response:', response);
+                    console.error('❌ СДЭК JS: response тип:', typeof response);
+                    console.error('❌ СДЭК JS: response.success:', response ? response.success : 'нет response');
+                    console.error('❌ СДЭК JS: response.data:', response ? response.data : 'нет response');
+                    console.error('❌ СДЭК JS: Полный ответ (JSON):', JSON.stringify(response, null, 2));
                     
                     // Показываем ошибку пользователю вместо fallback
                     if (callback) callback(null);
                 }
             },
             error: function(xhr, status, error) {
+                console.error('❌ СДЭК JS: =================== AJAX ОШИБКА ===================');
                 console.error('❌ СДЭК JS: AJAX ошибка при расчете стоимости!');
                 console.error('❌ СДЭК JS: HTTP статус:', status);
                 console.error('❌ СДЭК JS: Ошибка:', error);
-                console.error('❌ СДЭК JS: Ответ сервера:', xhr.responseText);
+                console.error('❌ СДЭК JS: XHR статус:', xhr.status);
+                console.error('❌ СДЭК JS: XHR статус текст:', xhr.statusText);
                 console.error('❌ СДЭК JS: Ready State:', xhr.readyState);
+                console.error('❌ СДЭК JS: Ответ сервера RAW:', xhr.responseText);
+                
+                // Пытаемся распарсить JSON ошибку
+                try {
+                    var errorResponse = JSON.parse(xhr.responseText);
+                    console.error('❌ СДЭК JS: Распарсенная ошибка JSON:', errorResponse);
+                } catch (e) {
+                    console.error('❌ СДЭК JS: Не удалось распарсить ответ как JSON:', e);
+                }
+                
+                console.error('❌ СДЭК JS: XHR заголовки ответа:', xhr.getAllResponseHeaders());
                 console.error('❌ СДЭК JS: Полный объект XHR:', xhr);
                 
                 // Показываем ошибку пользователю вместо fallback
