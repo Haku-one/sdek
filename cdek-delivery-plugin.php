@@ -1081,10 +1081,6 @@ class CdekDeliveryPlugin {
             }
         }
     }
-}
-
-// Инициализация плагина
-new CdekDeliveryPlugin();
 
 // Класс для работы с СДЭК API
 class CdekAPI {
@@ -1906,7 +1902,8 @@ class CdekAPI {
         
         error_log('СДЭК API: 🔬 === КОНЕЦ ДИАГНОСТИКИ ===');
     }
-    
+}
+
     /**
      * Регистрация полей для REST API (WooCommerce Store API)
      */
@@ -2103,3 +2100,6 @@ class CdekAPI {
         }
     }
 }
+
+// Инициализируем плагин
+new CdekDeliveryPlugin();
