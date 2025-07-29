@@ -88,6 +88,7 @@ $cdek_yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10
         <button type="button" id="test-cdek-connection" class="button button-secondary">Проверить подключение</button>
         <button type="button" id="test-cdek-calculation" class="button button-primary" style="margin-left: 10px;">Тестировать расчет стоимости</button>
         <button type="button" id="test-cdek-api-detailed" class="button button-secondary" style="margin-left: 10px;">Детальное тестирование API</button>
+        <button type="button" id="test-saratov-kursk" class="button button-secondary" style="margin-left: 10px;">🎯 Тест Саратов-Курск</button>
     </p>
     <div id="connection-result" style="margin-top: 10px;"></div>
     <div id="calculation-result" style="margin-top: 10px;"></div>
@@ -154,6 +155,27 @@ $cdek_yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10
                 }
                 
                 button.prop('disabled', false).text('Детальное тестирование API');
+            });
+        });
+        
+        $('#test-saratov-kursk').on('click', function() {
+            var button = $(this);
+            var result = $('#calculation-result');
+            
+            button.prop('disabled', true).text('🎯 Тестируем Саратов-Курск...');
+            result.html('');
+            
+            $.post(ajaxurl, {
+                action: 'test_saratov_kursk',
+                nonce: '<?php echo wp_create_nonce('test_saratov_kursk'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    result.html('<div class="notice notice-success inline"><p>🎉 ' + response.data + '</p></div>');
+                } else {
+                    result.html('<div class="notice notice-error inline"><p>❌ ' + response.data.message + '</p></div>');
+                }
+                
+                button.prop('disabled', false).text('🎯 Тест Саратов-Курск');
             });
         });
     });

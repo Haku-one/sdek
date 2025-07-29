@@ -94,6 +94,7 @@ class CdekDeliveryPlugin {
         // AJAX для тестирования расчета стоимости
         add_action('wp_ajax_test_cdek_calculation', array($this, 'ajax_test_cdek_calculation'));
         add_action('wp_ajax_test_cdek_api_detailed', array($this, 'ajax_test_cdek_api_detailed'));
+        add_action('wp_ajax_test_saratov_kursk', array($this, 'ajax_test_saratov_kursk'));
         
 
         
@@ -1455,6 +1456,100 @@ class CdekDeliveryPlugin {
             return false;
         }
     }
+    
+    /**
+     * Получить код города Курск из API СДЭК
+     */
+    private function get_kursk_city_code($token) {
+        $url = 'https://api.cdek.ru/v2/location/cities?' . http_build_query(array(
+            'city' => 'Курск',
+            'country_codes' => 'RU',
+            'size' => 10
+        ));
+        
+        error_log('🏙️ КУРСК: Запрашиваем код города Курск из API: ' . $url);
+        
+        $response = wp_remote_get($url, array(
+            'timeout' => 15,
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type' => 'application/json'
+            )
+        ));
+        
+        if (!is_wp_error($response)) {
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+            
+            if ($response_code === 200) {
+                $data = json_decode($body, true);
+                
+                if (is_array($data) && !empty($data)) {
+                    foreach ($data as $city_info) {
+                        if (isset($city_info['city']) && isset($city_info['code'])) {
+                            if (strtolower(trim($city_info['city'])) === 'курск') {
+                                error_log('🏙️ КУРСК: Найден код города Курск: ' . $city_info['code']);
+                                return intval($city_info['code']);
+                            }
+                        }
+                    }
+                    
+                    // Если точного совпадения нет, берем первый результат
+                    if (isset($data[0]['code'])) {
+                        error_log('🏙️ КУРСК: Приблизительное совпадение для Курска: ' . $data[0]['code']);
+                        return intval($data[0]['code']);
+                    }
+                }
+            }
+        }
+        
+        error_log('❌ КУРСК: Не удалось получить код города Курск, используем резервный 195');
+        return 195; // Резервный код
+    }
+
+    public function ajax_test_saratov_kursk() {
+        if (!wp_verify_nonce($_POST['nonce'], 'test_saratov_kursk')) {
+            wp_die('Security check failed');
+        }
+        
+        error_log('🧪 ТЕСТ САРАТОВ-КУРСК: Начинаем специальный тест расчета');
+        
+        $cdek_api = new CdekAPI();
+        
+        // Тестируем пункт KRS13 (Курск)
+        $test_point_data = array(
+            'code' => 'KRS13',
+            'location' => array(
+                'city' => 'Курск',
+                'postal_code' => '305000'
+            ),
+            'name' => 'Курск, Пункт выдачи KRS13'
+        );
+        
+        $test_dimensions = array(
+            'length' => 20,
+            'width' => 15,
+            'height' => 10
+        );
+        
+        error_log('🧪 ТЕСТ: Рассчитываем доставку Саратов → Курск (пункт KRS13)');
+        
+        $result = $cdek_api->calculate_delivery_cost_to_point('KRS13', $test_point_data, 0.5, $test_dimensions, 1000, 1);
+        
+        if ($result && isset($result['delivery_sum']) && $result['delivery_sum'] > 0) {
+            $message = '✅ Тест Саратов-Курск успешен! Стоимость: ' . $result['delivery_sum'] . ' руб.';
+            if (isset($result['alternative_tariff'])) {
+                $message .= ' (альтернативный тариф: ' . $result['alternative_tariff'] . ')';
+            }
+            wp_send_json_success($message);
+        } else {
+            $message = '❌ Тест Саратов-Курск не прошел. Проверьте логи для диагностики.';
+            wp_send_json_error(array(
+                'message' => $message,
+                'result' => $result
+            ));
+        }
+    }
 }
 
 // Класс для работы с СДЭК API
@@ -1960,17 +2055,36 @@ class CdekAPI {
                     'PERM' => array('code' => 296, 'name' => 'Пермь'),
                     'VRN' => array('code' => 432, 'name' => 'Воронеж'),
                     'VGG' => array('code' => 438, 'name' => 'Волгоград'),
-                    'KRS' => array('code' => 207, 'name' => 'Красноярск'),
                     'SRT' => array('code' => 354, 'name' => 'Саратов'),
+                    'SAR' => array('code' => 354, 'name' => 'Саратов'), // дублируем для пунктов SAR
                     'TYU' => array('code' => 409, 'name' => 'Тюмень')
                 );
                 
-                foreach ($city_codes as $prefix => $city_info) {
-                    if (stripos($point_code, $prefix) === 0) {
-                        $to_location['code'] = $city_info['code'];
-                        error_log('🏙️ СДЭК API: Найден город ' . $city_info['name'] . ' (код: ' . $city_info['code'] . ') по префиксу пункта: ' . $prefix);
+                // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ КУРСКА vs КРАСНОЯРСКА
+                if (stripos($point_code, 'KRS') === 0) {
+                    // Определяем по номеру пункта: KRS1-KRS99 = Курск, KRS100+ = Красноярск  
+                    $number = intval(substr($point_code, 3));
+                    if ($number <= 99) {
+                        $kursk_code = $this->get_kursk_city_code($token);
+                        $to_location['code'] = $kursk_code;
+                        error_log('🏙️ КУРСК: Определен как Курск (пункт ' . $point_code . '), код: ' . $kursk_code);
                         $location_found = true;
-                        break;
+                    } else {
+                        $to_location['code'] = 207; // Красноярск
+                        error_log('🏙️ КРС: Определен как Красноярск (пункт ' . $point_code . '), код: 207');
+                        $location_found = true;
+                    }
+                }
+                
+                // Обычная обработка остальных префиксов (кроме KRS, который уже обработан выше)
+                if (!$location_found) {
+                    foreach ($city_codes as $prefix => $city_info) {
+                        if (stripos($point_code, $prefix) === 0) {
+                            $to_location['code'] = $city_info['code'];
+                            error_log('🏙️ СДЭК API: Найден город ' . $city_info['name'] . ' (код: ' . $city_info['code'] . ') по префиксу пункта: ' . $prefix);
+                            $location_found = true;
+                            break;
+                        }
                     }
                 }
                 
@@ -2169,14 +2283,16 @@ class CdekAPI {
     private function try_alternative_calculation($original_data, $token) {
         error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ РАСЧЕТ: Пробуем альтернативные тарифы');
         
-        // Попробуем разные тарифы для ПВЗ и курьерской доставки
+        // Попробуем разные тарифы для ПВЗ и курьерской доставки (в порядке приоритета)
         $alternative_tariffs = [
             136 => 'Посылка склад-постамат/ПВЗ',
-            138 => 'Посылка дверь-постамат', 
-            233 => 'Эконом посылка склад-дверь',
+            233 => 'Эконом посылка склад-дверь', 
             234 => 'Стандарт посылка склад-дверь',
+            138 => 'Посылка дверь-постамат',
             62 => 'Магистральный экспресс склад-склад',
-            63 => 'Магистральный экспресс склад-дверь'
+            63 => 'Магистральный экспресс склад-дверь',
+            366 => 'Посылка склад-склад',
+            368 => 'Посылка дверь-дверь'
         ];
         
         foreach ($alternative_tariffs as $tariff => $tariff_name) {
