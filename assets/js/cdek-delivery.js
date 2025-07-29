@@ -2174,71 +2174,7 @@ jQuery(document).ready(function($) {
         }, 100);
     });
     
-    // Дополнительный обработчик через MutationObserver для отслеживания изменений aria-checked
-    var tabObserver = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
-                var $target = $(mutation.target);
-                if ($target.hasClass('wc-block-checkout__shipping-method-option')) {
-                    var title = $target.find('.wc-block-checkout__shipping-method-option-title').text().trim();
-                    var isSelected = $target.attr('aria-checked') === 'true';
-                    
-                    console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
-                    
-                    if (isSelected) {
-                        var mapContainer = $('#cdek-map-container');
-                        
-                        if (title === 'Доставка') {
-                            console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
-                            if (mapContainer.length === 0) {
-                                debouncer.debounce('init-cdek-aria', () => initCdekDelivery(), 200, 8);
-                            } else {
-                                mapContainer.show();
-                                // ИСПРАВЛЕНИЕ: Улучшенная реинициализация карты через MutationObserver
-                                setTimeout(() => {
-                                    console.log('🗺️ MutationObserver: Проверяем карту');
-                                    
-                                    // Сброс карты если она "сломана"
-                                    var mapElement = document.getElementById('cdek-map');
-                                    if (mapElement && (!cdekMap || mapElement.offsetWidth === 0)) {
-                                        console.log('🔄 MutationObserver: Сбрасываем карту');
-                                        cdekMap = null;
-                                        
-                                        if (typeof ymaps !== 'undefined') {
-                                            initYandexMap();
-                                        }
-                                    }
-                                    
-                                    // Восстанавливаем ПВЗ после реинициализации
-                                    if (cdekPoints && cdekPoints.length > 0) {
-                                        setTimeout(() => {
-                                            if (cdekMap) {
-                                                console.log('📍 MutationObserver: Восстанавливаем ПВЗ');
-                                                displayCdekPoints(cdekPoints);
-                                            }
-                                        }, 500);
-                                    }
-                                }, 300);
-                            }
-                        } else {
-                            console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
-                            if (mapContainer.length > 0) {
-                                mapContainer.hide();
-                                resetCdekShippingToDefault();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    });
-    
-    // Начинаем наблюдение за изменениями
-    tabObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['aria-checked'],
-        subtree: true
-    });
+    // УДАЛЕН: старый дублирующийся MutationObserver
     
     $(document).on('click', 'input[value*="cdek_delivery"]', function() {
         debouncer.debounce('init-cdek-click', () => initCdekDelivery(), 200, 7);
@@ -2352,62 +2288,69 @@ jQuery(document).ready(function($) {
     console.log('🏙️ Поддержка 1000+ городов России');
     console.log('📱 Оптимизировано для мобильных устройств');
     
-    // MutationObserver для отслеживания изменений aria-checked в способах доставки
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
-                var target = mutation.target;
-                var isSelected = target.getAttribute('aria-checked') === 'true';
-                var titleElement = target.querySelector('.wc-block-checkout__shipping-method-option-title');
-                var title = titleElement ? titleElement.textContent.trim() : '';
-                
-                console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
-                
-                if (title === 'Доставка' && isSelected) {
-                    console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
+            // MutationObserver для отслеживания изменений aria-checked в способах доставки
+        const shippingObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
+                    var target = mutation.target;
+                    var isSelected = target.getAttribute('aria-checked') === 'true';
+                    var titleElement = target.querySelector('.wc-block-checkout__shipping-method-option-title');
+                    var title = titleElement ? titleElement.textContent.trim() : '';
                     
-                    // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
-                    var mapBlock = $('.wp-block-cdek-checkout-map-block');
-                    if (mapBlock.length > 0) {
-                        mapBlock.show();
-                        mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
-                        console.log('🔧 Принудительно показан блок через aria-checked');
-                    }
+                    console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
                     
-                    // Проверяем и переинициализируем карту если нужно
-                    setTimeout(() => {
-                        var mapElement = document.getElementById('cdek-map');
-                        if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
-                            console.log('🔄 Переинициализация карты через aria-checked');
-                            cdekMap = null;
-                            initYandexMap();
-                            
-                            // Восстанавливаем ПВЗ
-                            if (cdekPoints && cdekPoints.length > 0) {
-                                setTimeout(() => {
-                                    console.log('📍 Восстанавливаем ПВЗ через aria-checked');
-                                    displayCdekPoints(cdekPoints);
-                                }, 1000);
-                            }
-                        } else {
-                            console.log('✅ Карта готова через aria-checked');
-                            if (mapElement) {
-                                mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
-                            }
+                    if (title === 'Доставка' && isSelected) {
+                        console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
+                        
+                        // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
+                        var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                        if (mapBlock.length > 0) {
+                            mapBlock.show();
+                            mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
+                            console.log('🔧 Принудительно показан блок через aria-checked');
                         }
-                    }, 300);
-                    
-                } else if (isSelected && (title === 'Самовывоз' || title === 'Обсудить доставку с менеджером')) {
-                    console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
-                    
-                    // Скрываем блок карты
-                    var mapBlock = $('.wp-block-cdek-checkout-map-block');
-                    if (mapBlock.length > 0) {
-                        mapBlock.hide();
-                        console.log('🔧 Скрыт блок через aria-checked');
+                        
+                        // Проверяем и переинициализируем карту если нужно
+                        setTimeout(() => {
+                            var mapElement = document.getElementById('cdek-map');
+                            if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
+                                console.log('🔄 Переинициализация карты через aria-checked');
+                                cdekMap = null;
+                                initYandexMap();
+                                
+                                // Восстанавливаем ПВЗ
+                                if (cdekPoints && cdekPoints.length > 0) {
+                                    setTimeout(() => {
+                                        console.log('📍 Восстанавливаем ПВЗ через aria-checked');
+                                        displayCdekPoints(cdekPoints);
+                                    }, 1000);
+                                }
+                            } else {
+                                console.log('✅ Карта готова через aria-checked');
+                                if (mapElement) {
+                                    mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
+                                }
+                            }
+                        }, 300);
+                        
+                    } else if (isSelected && (title === 'Самовывоз' || title === 'Обсудить доставку с менеджером')) {
+                        console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
+                        
+                        // Скрываем блок карты
+                        var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                        if (mapBlock.length > 0) {
+                            mapBlock.hide();
+                            console.log('🔧 Скрыт блок через aria-checked');
+                        }
                     }
                 }
-            }
+            });
         });
-    });
+
+        // Активируем наблюдение за изменениями aria-checked
+        shippingObserver.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['aria-checked'],
+            subtree: true
+        });
 });
