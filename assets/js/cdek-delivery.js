@@ -1654,7 +1654,7 @@ jQuery(document).ready(function($) {
     
     window.selectCdekPoint = function(point) {
         // Сохраняем выбранный пункт
-        selectedCdekPoint = point;
+        selectedPoint = point;
         
         // Запоминаем выбранный ПВЗ чтобы избежать повторных поисков
         window.lastSelectedPointCode = point.code;
@@ -1694,7 +1694,7 @@ jQuery(document).ready(function($) {
         }
         
         // НОВОЕ: Отправляем дополнительные данные о заказе
-        var cartData = getCartDataForCdek();
+        var cartData = getCartDataForCalculation();
         
         // Габариты корзины
         if (cartData.dimensions && !$('#cdek-cart-dimensions').length) {
@@ -1709,27 +1709,27 @@ jQuery(document).ready(function($) {
         }
         
         // Вес корзины
-        if (cartData.totalWeight && !$('#cdek-cart-weight').length) {
+        if (cartData.weight && !$('#cdek-cart-weight').length) {
             $('<input>').attr({
                 type: 'hidden',
                 id: 'cdek-cart-weight',
                 name: 'cdek_cart_weight',
-                value: cartData.totalWeight
+                value: cartData.weight
             }).appendTo('form.checkout, form.woocommerce-checkout');
-        } else if (cartData.totalWeight) {
-            $('#cdek-cart-weight').val(cartData.totalWeight);
+        } else if (cartData.weight) {
+            $('#cdek-cart-weight').val(cartData.weight);
         }
         
         // Стоимость корзины
-        if (cartData.totalPrice && !$('#cdek-cart-value').length) {
+        if (cartData.value && !$('#cdek-cart-value').length) {
             $('<input>').attr({
                 type: 'hidden',
                 id: 'cdek-cart-value',
                 name: 'cdek_cart_value',
-                value: cartData.totalPrice
+                value: cartData.value
             }).appendTo('form.checkout, form.woocommerce-checkout');
-        } else if (cartData.totalPrice) {
-            $('#cdek-cart-value').val(cartData.totalPrice);
+        } else if (cartData.value) {
+            $('#cdek-cart-value').val(cartData.value);
         }
         
         // Обновляем информацию о заказе и рассчитываем стоимость
