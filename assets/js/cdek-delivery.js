@@ -1392,6 +1392,10 @@ jQuery(document).ready(function($) {
             // Убираем фильтрацию по типу - показываем все пункты выдачи
             // if (point.type !== 'PVZ' && point.type) return false;
             
+            // ВРЕМЕННО ОТКЛЮЧАЕМ ФИЛЬТРАЦИЮ ПО ГОРОДУ ДЛЯ ОТЛАДКИ
+            return true;
+            
+            /*
             if (window.currentSearchCity) {
                 var pointCity = '';
                 
@@ -1442,12 +1446,27 @@ jQuery(document).ready(function($) {
             }
             
             return true;
+            */
         });
         
         console.log('🔍 Фильтрация ПВЗ:');
         console.log('- Всего получено от API:', points.length);
         console.log('- После фильтрации:', filteredPoints.length);
         console.log('- Поисковый город:', window.currentSearchCity);
+        
+        // ДЕТАЛЬНАЯ ОТЛАДКА СТРУКТУРЫ ДАННЫХ
+        if (points.length > 0) {
+            console.log('🔬 СТРУКТУРА ПЕРВОГО ПУНКТА:');
+            console.log('- Весь объект:', points[0]);
+            console.log('- point.city:', points[0].city);
+            console.log('- point.location:', points[0].location);
+            if (points[0].location) {
+                console.log('- point.location.city:', points[0].location.city);
+                console.log('- point.location.address:', points[0].location.address);
+            }
+            console.log('- point.name:', points[0].name);
+            console.log('- point.address_comment:', points[0].address_comment);
+        }
         
         // Показываем примеры отфильтрованных пунктов
         if (filteredPoints.length > 0) {
@@ -2145,6 +2164,43 @@ jQuery(document).ready(function($) {
                 }
             }
         }, 100);
+    });
+    
+    // Дополнительный обработчик для современных блоков WooCommerce
+    $(document).on('change click', '[role="radio"], input[type="radio"]', function() {
+        var $this = $(this);
+        var isShippingMethod = $this.closest('.wc-block-checkout__shipping-method-container, .wc-block-components-shipping-rates-control').length > 0;
+        
+        if (isShippingMethod) {
+            var title = '';
+            var labelElement = $this.closest('label, .wc-block-checkout__shipping-method-option').find('.wc-block-checkout__shipping-method-option-title, span');
+            if (labelElement.length > 0) {
+                title = labelElement.text().trim();
+            }
+            
+            var isSelected = $this.is(':checked') || $this.attr('aria-checked') === 'true';
+            
+            console.log('🔄 Изменение radio доставки:', title, 'Выбран:', isSelected);
+            
+            setTimeout(() => {
+                var mapContainer = $('#cdek-map-container');
+                
+                if (isSelected && (title.includes('СДЭК') || title.includes('Выберите пункт выдачи') || title.includes('Доставка'))) {
+                    console.log('✅ Выбрана доставка CDEK через radio - показываем карту');
+                    if (mapContainer.length === 0) {
+                        initCdekDelivery();
+                    } else {
+                        mapContainer.show();
+                    }
+                } else if (isSelected) {
+                    console.log('🙈 Выбран другой способ доставки через radio - скрываем карту CDEK');
+                    if (mapContainer.length > 0) {
+                        mapContainer.hide();
+                        resetCdekShippingToDefault();
+                    }
+                }
+            }, 150);
+        }
     });
     
     $(document).on('click', 'input[value*="cdek_delivery"]', function() {
