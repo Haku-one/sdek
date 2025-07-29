@@ -2119,63 +2119,56 @@ jQuery(document).ready(function($) {
     
     // Обработчик для блоков WooCommerce (новая система оформления)
     $(document).on('click', '.wc-block-checkout__shipping-method-option', function() {
-        var $clickedOption = $(this);
-        var titleElement = $clickedOption.find('.wc-block-checkout__shipping-method-option-title');
-        var title = titleElement.text().trim();
+        var methodTitle = $(this).find('.wc-block-checkout__shipping-method-option-title').text().trim();
+        console.log('🔄 Клик по способу доставки:', methodTitle);
         
-        console.log('🔄 Клик по способу доставки:', title);
-        
-        // Немедленно проверяем состояние после клика
         setTimeout(() => {
-            var isSelected = $clickedOption.attr('aria-checked') === 'true' || 
-                           $clickedOption.hasClass('wc-block-checkout__shipping-method-option--selected');
+            var isSelected = $(this).attr('aria-checked') === 'true';
+            console.log('🔄 Состояние после клика - Способ:', methodTitle, 'Выбран:', isSelected);
             
-            console.log('🔄 Состояние после клика - Способ:', title, 'Выбран:', isSelected);
-            
-            var mapContainer = $('#cdek-map-container');
-            
-            if (isSelected) {
-                if (title === 'Доставка') {
-                    console.log('✅ Выбрана "Доставка" - показываем карту CDEK');
-                    if (mapContainer.length === 0) {
-                        debouncer.debounce('init-cdek-delivery', () => initCdekDelivery(), 200, 8);
-                    } else {
-                        mapContainer.show();
-                        // ИСПРАВЛЕНИЕ: Принудительная реинициализация карты
-                        setTimeout(() => {
-                            console.log('🗺️ Проверяем состояние карты. cdekMap:', !!cdekMap, 'ymaps доступен:', typeof ymaps !== 'undefined');
-                            
-                            if (!cdekMap && typeof ymaps !== 'undefined') {
-                                console.log('🔄 Карта не инициализирована, запускаем инициализацию');
-                                initYandexMap();
-                            } else if (cdekMap && typeof cdekMap.container !== 'undefined') {
-                                // Проверяем, отображается ли карта корректно
-                                var mapElement = document.getElementById('cdek-map');
-                                if (mapElement && mapElement.offsetWidth === 0) {
-                                    console.log('🔄 Карта скрыта, перерисовываем');
-                                    cdekMap.container.fitToViewport();
-                                }
-                            }
-                            
-                            // Если есть сохранённые ПВЗ, отображаем их снова
-                            if (cdekPoints && cdekPoints.length > 0) {
-                                console.log('📍 Восстанавливаем ' + cdekPoints.length + ' ПВЗ на карте');
+            if (methodTitle === 'Доставка' && isSelected) {
+                console.log('✅ Выбрана "Доставка" - показываем карту CDEK');
+                
+                // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
+                var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                if (mapBlock.length > 0) {
+                    mapBlock.show();
+                    mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
+                    console.log('🔧 Принудительно показан блок wp-block-cdek-checkout-map-block');
+                }
+                
+                // Проверяем состояние карты и переинициализируем если нужно
+                setTimeout(() => {
+                    var mapElement = document.getElementById('cdek-map');
+                    if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
+                        console.log('🔄 Карта не видна, переинициализируем...');
+                        cdekMap = null;
+                        initYandexMap();
+                        
+                        // Восстанавливаем ПВЗ если они есть
+                        if (cdekPoints && cdekPoints.length > 0) {
+                            setTimeout(() => {
+                                console.log('📍 Восстанавливаем ПВЗ на карте');
                                 displayCdekPoints(cdekPoints);
-                            }
-                        }, 500);
+                            }, 1000);
+                        }
+                    } else {
+                        console.log('✅ Карта уже видна и готова');
+                        // Просто показываем существующую карту
+                        if (mapElement) {
+                            mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
+                        }
                     }
-                } else if (title === 'Самовывоз') {
-                    console.log('🙈 Выбран "Самовывоз" - скрываем карту CDEK');
-                    if (mapContainer.length > 0) {
-                        mapContainer.hide();
-                        resetCdekShippingToDefault();
-                    }
-                } else if (title === 'Обсудить доставку с менеджером') {
-                    console.log('💬 Выбрано "Обсудить с менеджером" - скрываем карту CDEK');
-                    if (mapContainer.length > 0) {
-                        mapContainer.hide();
-                        resetCdekShippingToDefault();
-                    }
+                }, 200);
+                
+            } else if (methodTitle === 'Самовывоз' && isSelected) {
+                console.log('🙈 Выбран "Самовывоз" - скрываем карту CDEK');
+                
+                // Скрываем блок карты
+                var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                if (mapBlock.length > 0) {
+                    mapBlock.hide();
+                    console.log('🔧 Скрыт блок wp-block-cdek-checkout-map-block');
                 }
             }
         }, 100);
@@ -2358,4 +2351,63 @@ jQuery(document).ready(function($) {
     console.log('🔍 Предотвращение повторных поисков');
     console.log('🏙️ Поддержка 1000+ городов России');
     console.log('📱 Оптимизировано для мобильных устройств');
+    
+    // MutationObserver для отслеживания изменений aria-checked в способах доставки
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
+                var target = mutation.target;
+                var isSelected = target.getAttribute('aria-checked') === 'true';
+                var titleElement = target.querySelector('.wc-block-checkout__shipping-method-option-title');
+                var title = titleElement ? titleElement.textContent.trim() : '';
+                
+                console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
+                
+                if (title === 'Доставка' && isSelected) {
+                    console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
+                    
+                    // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
+                    var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                    if (mapBlock.length > 0) {
+                        mapBlock.show();
+                        mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
+                        console.log('🔧 Принудительно показан блок через aria-checked');
+                    }
+                    
+                    // Проверяем и переинициализируем карту если нужно
+                    setTimeout(() => {
+                        var mapElement = document.getElementById('cdek-map');
+                        if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
+                            console.log('🔄 Переинициализация карты через aria-checked');
+                            cdekMap = null;
+                            initYandexMap();
+                            
+                            // Восстанавливаем ПВЗ
+                            if (cdekPoints && cdekPoints.length > 0) {
+                                setTimeout(() => {
+                                    console.log('📍 Восстанавливаем ПВЗ через aria-checked');
+                                    displayCdekPoints(cdekPoints);
+                                }, 1000);
+                            }
+                        } else {
+                            console.log('✅ Карта готова через aria-checked');
+                            if (mapElement) {
+                                mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
+                            }
+                        }
+                    }, 300);
+                    
+                } else if (isSelected && (title === 'Самовывоз' || title === 'Обсудить доставку с менеджером')) {
+                    console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
+                    
+                    // Скрываем блок карты
+                    var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                    if (mapBlock.length > 0) {
+                        mapBlock.hide();
+                        console.log('🔧 Скрыт блок через aria-checked');
+                    }
+                }
+            }
+        });
+    });
 });
