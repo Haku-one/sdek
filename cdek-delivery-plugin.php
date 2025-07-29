@@ -993,7 +993,7 @@ class CdekAPI {
             $params = array(
                 'type' => 'PVZ',
                 'country_code' => 'RU',
-                'size' => isset($strategy['broad_search']) ? '1000' : '500'
+                'size' => isset($strategy['broad_search']) ? '100' : '50' // ИСПРАВЛЕНИЕ: Уменьшаем лимит
             );
             
             // Добавляем ограничения по весу и габаритам если указаны
@@ -1090,6 +1090,12 @@ class CdekAPI {
                                 error_log('СДЭК API: ❌ ПВЗ на Зелинского НЕ найден');
                             }
                         }
+                    }
+                    
+                    // ИСПРАВЛЕНИЕ: Финальное ограничение количества результатов
+                    if (count($data) > 100) {
+                        error_log('СДЭК API: ⚠️ Слишком много результатов (' . count($data) . '), ограничиваем до 100');
+                        $data = array_slice($data, 0, 100);
                     }
                     
                     return $data;

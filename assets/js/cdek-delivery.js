@@ -1548,10 +1548,26 @@ jQuery(document).ready(function($) {
             return;
         }
         
-        var filteredPoints = points; // НЕ ФИЛЬТРУЕМ - API уже возвращает отфильтрованные данные
+        // ИСПРАВЛЕНИЕ: Добавляем интеллектуальную фильтрацию на клиенте
+        var filteredPoints = points;
         
-        
-        
+        // Если слишком много результатов и есть текущий город - дополнительно фильтруем
+        if (points.length > 100 && window.currentSearchCity) {
+            var cityLower = window.currentSearchCity.toLowerCase().trim();
+            
+            filteredPoints = points.filter(function(point) {
+                if (point.location && point.location.city) {
+                    var pointCity = point.location.city.toLowerCase().trim();
+                    // Строгое соответствие названию города
+                    return pointCity === cityLower || 
+                           pointCity.indexOf(cityLower) !== -1 ||
+                           cityLower.indexOf(pointCity) !== -1;
+                }
+                return true; // Оставляем точки без информации о городе
+            });
+            
+            console.log(`CDEK: Отфильтровано с ${points.length} до ${filteredPoints.length} пунктов для города "${window.currentSearchCity}"`);
+        }
         
         
         // Сортируем по расстоянию если есть координаты
@@ -1573,21 +1589,37 @@ jQuery(document).ready(function($) {
             });
         }
         
-        var maxPoints = 1000;
+        // ИСПРАВЛЕНИЕ: Ограничиваем количество пунктов для лучшей производительности
+        var maxPoints = window.innerWidth <= 768 ? 30 : 50; // Меньше для мобильных
         var pointsToShow = filteredPoints.slice(0, maxPoints);
         
         var pointsInfo = '';
         if (filteredPoints.length > 0) {
             var locationInfo = window.currentSearchCity ? ` в городе "${window.currentSearchCity}"` : '';
-            pointsInfo = `Найдено ${filteredPoints.length} пунктов выдачи${locationInfo}`;
+            
+            // ИСПРАВЛЕНИЕ: Более умное отображение количества
             if (filteredPoints.length > maxPoints) {
-                pointsInfo += ` (показано ${maxPoints} ближайших)`;
+                pointsInfo = `Найдено ${filteredPoints.length} пунктов выдачи${locationInfo} (показано ${maxPoints} ближайших)`;
+                
+                // Предупреждение если слишком много результатов
+                if (filteredPoints.length > 100) {
+                    pointsInfo += `<br><small style="color: #ff6b35;">⚠️ Слишком много результатов. Уточните адрес для более точного поиска.</small>`;
+                }
+            } else if (filteredPoints.length > 50) {
+                pointsInfo = `Найдено ${filteredPoints.length} пунктов выдачи${locationInfo}`;
+                pointsInfo += `<br><small style="color: #ff6b35;">💡 Много результатов. Для ускорения загрузки уточните район или улицу.</small>`;
+            } else if (filteredPoints.length > 20) {
+                pointsInfo = `Найдено ${filteredPoints.length} пунктов выдачи${locationInfo}`;
+            } else if (filteredPoints.length > 10) {
+                pointsInfo = `Найдено ${filteredPoints.length} пунктов выдачи${locationInfo}`;
+            } else {
+                pointsInfo = `Найдено ${filteredPoints.length} ${filteredPoints.length === 1 ? 'пункт выдачи' : filteredPoints.length < 5 ? 'пункта выдачи' : 'пунктов выдачи'}${locationInfo}`;
             }
         } else {
             var locationInfo = window.currentSearchCity ? ` в городе "${window.currentSearchCity}"` : '';
             pointsInfo = `Пункты выдачи не найдены${locationInfo}`;
         }
-        $('#cdek-points-count').text(pointsInfo);
+        $('#cdek-points-count').html(pointsInfo);
         
         var bounds = [];
         
