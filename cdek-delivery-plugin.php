@@ -72,6 +72,9 @@ class CdekDeliveryPlugin {
         // НОВОЕ: Добавляем информацию о доставке на страницу заказа (thank you page)
         add_action('woocommerce_order_details_after_order_table', array($this, 'display_cdek_info_on_order_page'));
         
+        // Добавляем стоимость доставки в итоги заказа
+        add_action('woocommerce_order_details_after_order_table_items', array($this, 'add_cdek_cost_to_order_totals'));
+        
         // НОВОЕ: Обновляем стоимость доставки в заказе
         add_action('woocommerce_checkout_update_order_meta', array($this, 'update_order_shipping_cost'), 20, 1);
         
@@ -595,8 +598,16 @@ class CdekDeliveryPlugin {
                     echo '<strong>Стоимость товаров:</strong> ' . number_format($cart_value, 2) . ' руб.<br>';
                 }
                 
-                if ($delivery_cost) {
-                    echo '<strong>Стоимость доставки:</strong> ' . number_format($delivery_cost, 2) . ' руб.<br>';
+                echo '</div>';
+            }
+            
+            // Стоимость доставки - выделяем отдельно
+            if ($delivery_cost && $delivery_cost > 0) {
+                echo '<div style="margin-bottom: 15px; padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px;">';
+                echo '<h5 style="margin: 0 0 5px 0; color: #155724;">💰 Стоимость доставки СДЭК</h5>';
+                echo '<span style="font-size: 18px; font-weight: bold; color: #155724;">' . number_format($delivery_cost, 2) . ' руб.</span>';
+                if ($point_code) {
+                    echo '<br><small style="color: #6c757d;">До пункта выдачи: ' . esc_html($point_code) . '</small>';
                 }
                 echo '</div>';
             }
@@ -778,9 +789,11 @@ class CdekDeliveryPlugin {
                     if ($cart_weight) {
                         echo "Вес: " . number_format($cart_weight, 0) . " г\n";
                     }
-                    if ($delivery_cost) {
-                        echo "Стоимость доставки: " . number_format($delivery_cost, 2) . " руб.\n";
-                    }
+                }
+                
+                // Стоимость доставки выделяем отдельно
+                if ($delivery_cost && $delivery_cost > 0) {
+                    echo "\n💰 СТОИМОСТЬ ДОСТАВКИ: " . number_format($delivery_cost, 2) . " руб.\n";
                 }
                 
                 echo str_repeat('=', 50) . "\n\n";
@@ -823,10 +836,19 @@ class CdekDeliveryPlugin {
                         echo '<p style="margin: 5px 0;"><strong>Вес:</strong> ' . number_format($cart_weight, 0) . ' г</p>';
                     }
                     
-                    if ($delivery_cost) {
-                        echo '<p style="margin: 5px 0;"><strong>Стоимость доставки:</strong> ' . number_format($delivery_cost, 2) . ' руб.</p>';
-                    }
+
                     
+                    echo '</div>';
+                }
+                
+                // Стоимость доставки - отдельный блок
+                if ($delivery_cost && $delivery_cost > 0) {
+                    echo '<div style="margin: 15px 0; padding: 20px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px; text-align: center;">';
+                    echo '<h4 style="color: #155724; margin: 0 0 10px 0;">💰 Стоимость доставки СДЭК</h4>';
+                    echo '<div style="font-size: 24px; font-weight: bold; color: #155724;">' . number_format($delivery_cost, 2) . ' руб.</div>';
+                    if ($point_code) {
+                        echo '<p style="margin: 10px 0 0 0; color: #6c757d; font-size: 14px;">До пункта выдачи: ' . esc_html($point_code) . '</p>';
+                    }
                     echo '</div>';
                 }
                 
@@ -872,9 +894,7 @@ class CdekDeliveryPlugin {
                     echo '<p><strong>Время работы:</strong> ' . esc_html($point_data['work_time']) . '</p>';
                 }
                 
-                if ($delivery_cost) {
-                    echo '<p><strong>Стоимость доставки:</strong> ' . number_format($delivery_cost, 0) . ' руб.</p>';
-                }
+
                 
                 echo '</div>';
             }
@@ -900,7 +920,37 @@ class CdekDeliveryPlugin {
                 echo '</div>';
             }
             
+            // Стоимость доставки - отдельный выделенный блок
+            if ($delivery_cost && $delivery_cost > 0) {
+                echo '<div class="cdek-delivery-cost" style="margin: 20px 0; padding: 25px; background: #d4edda; border: 2px solid #28a745; border-radius: 8px; text-align: center;">';
+                echo '<h3 style="color: #155724; margin: 0 0 15px 0;">💰 Стоимость доставки СДЭК</h3>';
+                echo '<div style="font-size: 28px; font-weight: bold; color: #155724; margin: 10px 0;">' . number_format($delivery_cost, 2) . ' руб.</div>';
+                if ($point_code) {
+                    echo '<p style="margin: 10px 0 0 0; color: #6c757d;">До пункта выдачи: ' . esc_html($point_code) . '</p>';
+                }
+                echo '</div>';
+            }
+            
             echo '</section>';
+        }
+    }
+    
+    public function add_cdek_cost_to_order_totals($order) {
+        $delivery_cost = get_post_meta($order->get_id(), '_cdek_delivery_cost', true);
+        $point_code = get_post_meta($order->get_id(), '_cdek_point_code', true);
+        
+        if ($delivery_cost && $delivery_cost > 0) {
+            echo '<tr class="cdek-delivery-cost-row">';
+            echo '<th scope="row" style="color: #28a745; font-weight: bold;">💰 Доставка СДЭК:</th>';
+            echo '<td style="color: #28a745; font-weight: bold; font-size: 16px;">' . wc_price($delivery_cost) . '</td>';
+            echo '</tr>';
+            
+            if ($point_code) {
+                echo '<tr class="cdek-point-code-row">';
+                echo '<th scope="row" style="color: #6c757d;">📍 Пункт выдачи:</th>';
+                echo '<td style="color: #6c757d;">' . esc_html($point_code) . '</td>';
+                echo '</tr>';
+            }
         }
     }
     
