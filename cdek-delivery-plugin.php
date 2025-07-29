@@ -278,19 +278,23 @@ class CdekDeliveryPlugin {
         } else {
             error_log('СДЭК расчет: ❌ API не вернул корректную стоимость.');
             error_log('СДЭК расчет: Детали ответа API: ' . print_r($cost_data, true));
-            error_log('СДЭК расчет: ❌ ОТКАЗЫВАЕМСЯ ОТ РАСЧЕТА - НЕТ FALLBACK');
+            error_log('СДЭК расчет: 🔄 Используем FALLBACK расчет');
             
-            // НЕТ РЕЗЕРВНОГО РАСЧЕТА! Возвращаем ошибку
-            wp_send_json_error(array(
-                'message' => 'API СДЭК недоступен, расчет стоимости невозможен',
-                'api_response' => $cost_data,
-                'debug_info' => array(
-                    'point_code' => $point_code,
-                    'cart_weight' => $cart_weight,
-                    'cart_value' => $cart_value,
-                    'cart_dimensions' => $cart_dimensions
-                )
+            // ИСПОЛЬЗУЕМ РЕЗЕРВНЫЙ РАСЧЕТ
+            $fallback_cost = $this->calculate_fallback_cost($cart_weight, $cart_value, $cart_dimensions, $has_real_dimensions);
+            
+            error_log('СДЭК расчет: ✅ Fallback расчет: ' . $fallback_cost . ' руб.');
+            
+            wp_send_json_success(array(
+                'delivery_sum' => $fallback_cost,
+                'period_min' => 2,
+                'period_max' => 5,
+                'api_success' => false,
+                'fallback' => true,
+                'message' => 'Использован резервный расчет (API недоступен)'
             ));
+        }
+    }
         }
     }
     
