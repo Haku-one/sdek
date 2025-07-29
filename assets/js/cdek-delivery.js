@@ -1342,6 +1342,7 @@ jQuery(document).ready(function($) {
         var searchAddress = window.currentSearchCity || 'Россия';
         
         console.log('🔍 Отправляем запрос к API СДЭК для адреса:', searchAddress);
+        console.log('🏙️ Параметр города для API:', window.currentSearchCity || 'не указан');
         
         $.ajax({
             url: cdek_ajax.ajax_url,
