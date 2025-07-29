@@ -1338,11 +1338,8 @@ jQuery(document).ready(function($) {
     function performCdekSearch() {
         if (typeof cdek_ajax === 'undefined') return;
         
-        // Формируем адрес для поиска - используем конкретный город, если он известен
-        var searchAddress = 'Россия';
-        if (window.currentSearchCity) {
-            searchAddress = window.currentSearchCity;
-        }
+        // КАРДИНАЛЬНОЕ ИСПРАВЛЕНИЕ: добавляем параметр city в API запрос
+        var searchAddress = window.currentSearchCity || 'Россия';
         
         console.log('🔍 Отправляем запрос к API СДЭК для адреса:', searchAddress);
         
@@ -1354,6 +1351,7 @@ jQuery(document).ready(function($) {
             data: {
                 action: 'get_cdek_points',
                 address: searchAddress,
+                city: window.currentSearchCity || '', // ДОБАВЛЯЕМ ПАРАМЕТР ГОРОДА
                 nonce: cdek_ajax.nonce
             },
             success: function(response) {
@@ -1366,14 +1364,7 @@ jQuery(document).ready(function($) {
                         console.log('🔍 Первые 3 пункта от API:');
                         for (var i = 0; i < Math.min(3, response.data.length); i++) {
                             var point = response.data[i];
-                            console.log('Пункт ' + (i+1) + ':', {
-                                code: point.code,
-                                name: point.name,
-                                type: point.type,
-                                city: point.location ? point.location.city : 'не указан',
-                                address: point.location ? point.location.address : 'не указан',
-                                address_comment: point.address_comment
-                            });
+                            console.log('Пункт ' + (i+1) + ':', point);
                         }
                         
                         // Ищем конкретно пункт в Тюмени по адресу Зелинского
@@ -1428,229 +1419,13 @@ jQuery(document).ready(function($) {
             return;
         }
         
-        var filteredPoints = points.filter(function(point) {
-            // Убираем фильтрацию по типу - показываем все пункты выдачи
-            // if (point.type !== 'PVZ' && point.type) return false;
-            
-            if (window.currentSearchCity) {
-                var pointCity = '';
-                
-                // ПРАВИЛЬНАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ ПОИСКА ГОРОДА (на основе анализа структуры)
-                // 1. Основное поле - point.location.city
-                if (point.location && point.location.city) {
-                    pointCity = point.location.city.trim();
-                }
-                
-                // 2. Если не нашли, ищем в name (второй элемент после запятой)
-                if (!pointCity && point.name && point.name.includes(',')) {
-                    var nameParts = point.name.split(',');
-                    if (nameParts.length >= 2) {
-                        pointCity = nameParts[1].trim();
-                    }
-                }
-                
-                // 3. Если не нашли, ищем в address
-                if (!pointCity && point.location && point.location.address) {
-                    var addressParts = point.location.address.split(',');
-                    if (addressParts.length > 0) {
-                        pointCity = addressParts[0].trim();
-                    }
-                }
-                
-                // 4. Корневое поле city (если есть)
-                if (!pointCity && point.city) {
-                    pointCity = point.city.trim();
-                }
-                
-                // 5. address_comment (если есть)
-                if (!pointCity && point.address_comment) {
-                    var commentParts = point.address_comment.split(',');
-                    if (commentParts.length > 0) {
-                        pointCity = commentParts[0].trim();
-                    }
-                }
-                
-                if (pointCity) {
-                    pointCity = pointCity.replace(/^(г\.?\s*|город\s+)/i, '').trim();
-                }
-                
-                var searchCityLower = window.currentSearchCity.toLowerCase().trim();
-                var pointCityLower = pointCity.toLowerCase().trim();
-                
-                // УЛУЧШЕННОЕ СРАВНЕНИЕ ГОРОДОВ
-                if (pointCityLower && searchCityLower) {
-                    // Точное совпадение
-                    if (pointCityLower === searchCityLower) {
-                        return true;
-                    }
-                    
-                    // Один город содержится в другом
-                    if (pointCityLower.includes(searchCityLower) || searchCityLower.includes(pointCityLower)) {
-                        return true;
-                    }
-                    
-                    // Для коротких поисковых запросов (меньше 4 символов) - строгое совпадение
-                    if (searchCityLower.length < 4) {
-                        return false;
-                    }
-                    
-                    // Для длинных - проверяем начало
-                    if (pointCityLower.startsWith(searchCityLower) || searchCityLower.startsWith(pointCityLower)) {
-                        return true;
-                    }
-                    
-                    return false;
-                } else {
-                    // Если не удалось определить город пункта - не показываем
-                    return false;
-                }
-            }
-            
-            return true;
-        });
+        var filteredPoints = points; // НЕ ФИЛЬТРУЕМ - API уже возвращает отфильтрованные данные
         
-        console.log('🔍 Фильтрация ПВЗ:');
-        console.log('- Всего получено от API:', points.length);
-        console.log('- После фильтрации:', filteredPoints.length);
-        console.log('- Поисковый город:', window.currentSearchCity);
+        console.log('🔍 Результат API фильтрации:');
+        console.log('- Всего получено от API для города "' + window.currentSearchCity + '":', points.length);
+        console.log('- Отображаем все полученные пункты:', filteredPoints.length);
         
-        // ДЕТАЛЬНАЯ ОТЛАДКА СТРУКТУРЫ ДАННЫХ
-        if (points.length > 0) {
-            console.log('🔬 СТРУКТУРА ПЕРВОГО ПУНКТА:');
-            console.log('- Весь объект:', points[0]);
-            console.log('- point.city:', points[0].city);
-            console.log('- point.location:', points[0].location);
-            if (points[0].location) {
-                console.log('- point.location.city:', points[0].location.city);
-                console.log('- point.location.address:', points[0].location.address);
-            }
-            console.log('- point.name:', points[0].name);
-            console.log('- point.address_comment:', points[0].address_comment);
-            console.log('- point.type:', points[0].type);
-            
-            // АНАЛИЗ ТИПОВ ПУНКТОВ
-            var typeStats = {};
-            points.forEach(function(p) {
-                var type = p.type || 'UNKNOWN';
-                if (!typeStats[type]) {
-                    typeStats[type] = 0;
-                }
-                typeStats[type]++;
-            });
-            
-            console.log('📊 СТАТИСТИКА ТИПОВ ПУНКТОВ:');
-            Object.keys(typeStats).forEach(function(type) {
-                console.log('- ' + type + ': ' + typeStats[type] + ' пунктов');
-            });
-            
-            // АНАЛИЗ ДЛЯ КОНКРЕТНОГО ГОРОДА
-            if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('москва')) {
-                var moscowPoints = points.filter(function(p) {
-                    return (p.city && p.city.toLowerCase().includes('москва')) ||
-                           (p.location && p.location.city && p.location.city.toLowerCase().includes('москва'));
-                });
-                
-                var moscowTypeStats = {};
-                moscowPoints.forEach(function(p) {
-                    var type = p.type || 'UNKNOWN';
-                    if (!moscowTypeStats[type]) {
-                        moscowTypeStats[type] = 0;
-                    }
-                    moscowTypeStats[type]++;
-                });
-                
-                console.log('🏛️ СТАТИСТИКА ТИПОВ ДЛЯ МОСКВЫ:');
-                Object.keys(moscowTypeStats).forEach(function(type) {
-                    console.log('- ' + type + ': ' + moscowTypeStats[type] + ' пунктов');
-                });
-                
-                console.log('🏛️ Всего пунктов в Москве без фильтрации по типу:', moscowPoints.length);
-            }
-        }
-        
-        // Показываем примеры отфильтрованных пунктов
-        if (filteredPoints.length > 0) {
-            console.log('- Первые 3 отфильтрованных пункта:');
-            for (var i = 0; i < Math.min(3, filteredPoints.length); i++) {
-                var point = filteredPoints[i];
-                console.log('  Пункт ' + (i+1) + ':', {
-                    code: point.code,
-                    name: point.name,
-                    city: point.location ? point.location.city : 'не указан',
-                    address: point.location ? point.location.address : 'не указан'
-                });
-            }
-        }
-        
-        // Дополнительная отладка для конкретных городов
-        if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('тюмень')) {
-            console.log('🎯 ОТЛАДКА ТЮМЕНИ:');
-            var tyumenPvz = points.filter(function(p) {
-                var cityMatch = false;
-                var hasZelinsky = false;
-                
-                // Проверяем город
-                if (p.location && p.location.city) {
-                    cityMatch = p.location.city.toLowerCase().includes('тюмень');
-                }
-                if (!cityMatch && p.name) {
-                    cityMatch = p.name.toLowerCase().includes('тюмень');
-                }
-                
-                // Проверяем адрес Зелинского
-                if (p.location && p.location.address) {
-                    hasZelinsky = p.location.address.toLowerCase().includes('зелинск');
-                }
-                if (!hasZelinsky && p.address_comment) {
-                    hasZelinsky = p.address_comment.toLowerCase().includes('зелинск');
-                }
-                if (!hasZelinsky && p.name) {
-                    hasZelinsky = p.name.toLowerCase().includes('зелинск');
-                }
-                
-                return cityMatch && hasZelinsky;
-            });
-            
-            console.log('🎯 ПВЗ в Тюмени с адресом Зелинского:', tyumenPvz.length);
-            if (tyumenPvz.length > 0) {
-                console.log('🎯 Найденные ПВЗ Зелинского:', tyumenPvz);
-            } else {
-                console.log('❌ ПВЗ по адресу Зелинского в Тюмени НЕ НАЙДЕН');
-                
-                // Показываем все ПВЗ Тюмени для анализа
-                var allTyumenPvz = points.filter(function(p) {
-                    if (p.location && p.location.city && p.location.city.toLowerCase().includes('тюмень')) return true;
-                    if (p.name && p.name.toLowerCase().includes('тюмень')) return true;
-                    return false;
-                });
-                console.log('🔍 Все ПВЗ Тюмени для анализа (' + allTyumenPvz.length + '):', allTyumenPvz.slice(0, 5));
-            }
-        }
-        
-        // Аналогичная отладка для Москвы
-        if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('москва')) {
-            console.log('🏛️ ОТЛАДКА МОСКВЫ:');
-            var moscowPvz = filteredPoints.length;
-            console.log('🏛️ ПВЗ в Москве после фильтрации:', moscowPvz);
-            console.log('🏛️ Ожидается: ~414 пунктов');
-            
-            if (moscowPvz < 400) {
-                console.warn('⚠️ В Москве найдено меньше ПВЗ чем ожидается!');
-            }
-        }
-        
-        // Аналогичная отладка для Саратова
-        if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('саратов')) {
-            console.log('🏫 ОТЛАДКА САРАТОВА:');
-            var saratovPvz = filteredPoints.length;
-            console.log('🏫 ПВЗ в Саратове после фильтрации:', saratovPvz);
-            console.log('🏫 Ожидается: ~29 пунктов');
-            
-            if (saratovPvz < 25) {
-                console.warn('⚠️ В Саратове найдено меньше ПВЗ чем ожидается!');
-            }
-        }
-        
+        // Сортируем по расстоянию если есть координаты
         if (window.currentSearchCoordinates && filteredPoints.length > 0) {
             filteredPoints.sort(function(a, b) {
                 var distA = calculateDistance(
@@ -1669,7 +1444,7 @@ jQuery(document).ready(function($) {
             });
         }
         
-        var maxPoints = 1000; // Увеличиваем лимит для отображения большего количества ПВЗ
+        var maxPoints = 1000;
         var pointsToShow = filteredPoints.slice(0, maxPoints);
         
         var pointsInfo = '';

@@ -85,8 +85,8 @@ class CdekDeliveryPlugin {
         if (is_checkout()) {
             wp_enqueue_script('yandex-maps', 'https://api-maps.yandex.ru/2.1/?apikey=4020b4d5-1d96-476c-a10e-8ab18f0f3702&lang=ru_RU', array(), null, true);
             
-            wp_enqueue_script('cdek-delivery-js', CDEK_DELIVERY_PLUGIN_URL . 'assets/js/cdek-delivery.js', array('jquery', 'yandex-maps'), '2.4.0', true);
-            wp_enqueue_style('cdek-delivery-css', CDEK_DELIVERY_PLUGIN_URL . 'assets/css/cdek-delivery.css', array(), '2.4.0');
+            wp_enqueue_script('cdek-delivery-js', CDEK_DELIVERY_PLUGIN_URL . 'assets/js/cdek-delivery.js', array('jquery', 'yandex-maps'), '2.5.0', true);
+            wp_enqueue_style('cdek-delivery-css', CDEK_DELIVERY_PLUGIN_URL . 'assets/css/cdek-delivery.css', array(), '2.5.0');
             
             wp_localize_script('cdek-delivery-js', 'cdek_ajax', array(
                 'ajax_url' => admin_url('admin-ajax.php'),
@@ -139,12 +139,13 @@ class CdekDeliveryPlugin {
         }
         
         $address = sanitize_text_field($_POST['address']);
+        $city = isset($_POST['city']) ? sanitize_text_field($_POST['city']) : '';
         
         // Добавляем отладочную информацию
-        error_log('СДЭК AJAX: Запрос пунктов для адреса: ' . $address);
+        error_log('СДЭК AJAX: Запрос пунктов для адреса: ' . $address . ', города: ' . $city);
         
         $cdek_api = new CdekAPI();
-        $points = $cdek_api->get_delivery_points($address);
+        $points = $cdek_api->get_delivery_points($address, $city);
         
         // Логируем результат
         error_log('СДЭК AJAX: Получено пунктов: ' . count($points));
@@ -567,7 +568,7 @@ class CdekAPI {
         return $token;
     }
     
-    public function get_delivery_points($address) {
+    public function get_delivery_points($address, $city = '') {
         $token = $this->get_auth_token();
         if (!$token) {
             error_log('СДЭК API: Не удалось получить токен авторизации');
@@ -575,8 +576,8 @@ class CdekAPI {
         }
         
         // Извлекаем город из адреса
-        $city = $this->extract_city_from_address($address);
-        error_log('СДЭК API: Ищем пункты для города: ' . ($city ? $city : 'все города России'));
+        $city_for_api = $this->extract_city_from_address($address, $city);
+        error_log('СДЭК API: Ищем пункты для города: ' . ($city_for_api ? $city_for_api : 'все города России'));
         
         // Строим параметры запроса для получения максимального количества ПВЗ
         $params = array(
@@ -595,8 +596,8 @@ class CdekAPI {
         );
         
         // Добавляем город только если он указан
-        if (!empty($city)) {
-            $params['city'] = $city;
+        if (!empty($city_for_api)) {
+            $params['city'] = $city_for_api;
         }
         
         // Строим URL с параметрами для GET запроса
@@ -625,7 +626,7 @@ class CdekAPI {
                     error_log('СДЭК API: ✅ Найдено пунктов в entity: ' . count($body['entity']));
                     
                     // Детальная отладка для конкретных городов
-                    if ($city && strtolower($city) === 'тюмень') {
+                    if ($city_for_api && strtolower($city_for_api) === 'тюмень') {
                         error_log('🎯 СДЭК API: Отладка Тюмени - всего пунктов от API: ' . count($body['entity']));
                         
                         $tyumen_zelinsky = array_filter($body['entity'], function($point) {
@@ -650,12 +651,12 @@ class CdekAPI {
                         }
                     }
                     
-                    if ($city && strtolower($city) === 'москва') {
+                    if ($city_for_api && strtolower($city_for_api) === 'москва') {
                         error_log('🏛️ СДЭК API: Отладка Москвы - всего пунктов от API: ' . count($body['entity']));
                         error_log('🏛️ СДЭК API: Ожидается: ~414 пунктов');
                     }
                     
-                    if ($city && strtolower($city) === 'саратов') {
+                    if ($city_for_api && strtolower($city_for_api) === 'саратов') {
                         error_log('🏫 СДЭК API: Отладка Саратова - всего пунктов от API: ' . count($body['entity']));
                         error_log('🏫 СДЭК API: Ожидается: ~29 пунктов');
                     }
@@ -991,7 +992,7 @@ class CdekAPI {
         return false;
     }
     
-    private function extract_city_from_address($address) {
+    private function extract_city_from_address($address, $city_override = '') {
         // Улучшенное извлечение города из адреса
         $address = trim($address);
         
@@ -1001,6 +1002,12 @@ class CdekAPI {
             return '';
         }
         
+        // Если передан город для переопределения, используем его
+        if (!empty($city_override)) {
+            error_log('СДЭК API: Используем переданный город для поиска: ' . $city_override);
+            return $city_override;
+        }
+
         // Очищаем от префиксов "г.", "город", "г "
         $city = preg_replace('/^(г\.?\s*|город\s+)/ui', '', $address);
         
