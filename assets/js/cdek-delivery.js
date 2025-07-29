@@ -723,8 +723,10 @@ jQuery(document).ready(function($) {
             return;
         }
         
-        
-        
+        console.log('🎯 СДЭК JS: Начинаем расчет стоимости для пункта:', point.code);
+        console.log('🎯 СДЭК JS: Данные пункта:', point);
+        console.log('🎯 СДЭК JS: Данные корзины:', cartData);
+        console.log('🎯 СДЭК JS: САРАТОВ ЖЕСТКО ЗАФИКСИРОВАН В PHP!');
         
         $.ajax({
             url: cdek_ajax.ajax_url,
@@ -742,10 +744,14 @@ jQuery(document).ready(function($) {
                 packages_count: cartData.packagesCount || 1,
                 nonce: cdek_ajax.nonce || ''
             },
+            beforeSend: function() {
+                console.log('📤 СДЭК JS: Отправляем AJAX запрос на расчет стоимости...');
+            },
             success: function(response) {
-                
+                console.log('📥 СДЭК JS: Получен ответ от сервера:', response);
                 
                 if (response && response.success && response.data && response.data.delivery_sum) {
+                    console.log('✅ СДЭК JS: Успешный расчет! Стоимость:', response.data.delivery_sum);
                     var deliveryCost = parseInt(response.data.delivery_sum);
                     
                     if (cartData.packagesCount > 1) {
@@ -767,29 +773,38 @@ jQuery(document).ready(function($) {
                     
                     if (callback) callback(deliveryCost);
                 } else if (!response.success) {
-                    console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    console.error('❌ СДЭК JS: API вернул ошибку!');
+                    console.error('❌ СДЭК JS: Детали ошибки:', response.data);
+                    console.error('❌ СДЭК JS: Сообщение:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    console.error('❌ СДЭК JS: Полный ответ:', response);
                     
                     // Показываем ошибку пользователю вместо fallback
                     if (callback) callback(null);
                 } else {
-                    console.error('❌ Некорректный ответ от API СДЭК');
+                    console.error('❌ СДЭК JS: Некорректный ответ от API СДЭК');
+                    console.error('❌ СДЭК JS: Полный ответ:', response);
                     
                     // Показываем ошибку пользователю вместо fallback
                     if (callback) callback(null);
                 }
             },
             error: function(xhr, status, error) {
-                console.error('❌ AJAX ошибка при расчете стоимости:', {
-                    status: status,
-                    error: error,
-                    responseText: xhr.responseText,
-                    readyState: xhr.readyState
-                });
+                console.error('❌ СДЭК JS: AJAX ошибка при расчете стоимости!');
+                console.error('❌ СДЭК JS: HTTP статус:', status);
+                console.error('❌ СДЭК JS: Ошибка:', error);
+                console.error('❌ СДЭК JS: Ответ сервера:', xhr.responseText);
+                console.error('❌ СДЭК JS: Ready State:', xhr.readyState);
+                console.error('❌ СДЭК JS: Полный объект XHR:', xhr);
                 
                 // Показываем ошибку пользователю вместо fallback
                 if (callback) callback(null);
+            },
+            complete: function() {
+                console.log('🏁 СДЭК JS: Запрос расчета стоимости завершен');
             }
         });
+        
+        console.log('🚀 СДЭК JS: AJAX запрос отправлен! Ждем ответ...');
     }
     
     // ========== ОСТАЛЬНЫЕ ФУНКЦИИ (УПРОЩЕННЫЕ ДЛЯ МОБИЛЬНЫХ) ==========

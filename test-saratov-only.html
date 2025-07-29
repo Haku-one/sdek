@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест СДЭК - Только Саратов</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { padding: 10px 20px; margin: 5px; font-size: 14px; }
+        .logs { background: #000; color: #0f0; padding: 10px; height: 400px; overflow-y: scroll; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Тест СДЭК API - ТОЛЬКО САРАТОВ</h1>
+    
+    <div class="test-section">
+        <h2>Тестовые данные</h2>
+        <p><strong>Город отправления:</strong> Саратов (код 354) - ЖЕСТКО ЗАФИКСИРОВАН!</p>
+        <p><strong>Пункт выдачи:</strong> SAR52 (Саратов)</p>
+        <p><strong>Вес:</strong> 0.5 кг</p>
+        <p><strong>Габариты:</strong> 20x15x10 см</p>
+        <p><strong>Стоимость товара:</strong> 1000 руб</p>
+    </div>
+    
+    <div class="test-section">
+        <button onclick="testCalculation()">🧪 Запустить тест расчета</button>
+        <button onclick="clearLogs()">🗑️ Очистить логи</button>
+        <div id="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Детальные логи:</h3>
+        <div id="logs" class="logs"></div>
+    </div>
+
+    <script>
+        // Перехватываем все console.log для отображения в интерфейсе
+        const originalLog = console.log;
+        const originalError = console.error;
+        const logsDiv = document.getElementById('logs');
+        
+        function addLog(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? '#ff6b6b' : '#4ecdc4';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+        
+        console.log = function(...args) {
+            addLog(args.join(' '), 'log');
+            originalLog.apply(console, args);
+        };
+        
+        console.error = function(...args) {
+            addLog(args.join(' '), 'error');
+            originalError.apply(console, args);
+        };
+        
+        function clearLogs() {
+            logsDiv.innerHTML = '';
+        }
+        
+        function testCalculation() {
+            console.log('🚀 НАЧИНАЕМ ТЕСТ РАСЧЕТА СДЭК - ТОЛЬКО САРАТОВ!');
+            
+            // Тестовые данные
+            const testData = {
+                point: {
+                    code: 'SAR52',
+                    location: {
+                        city_code: 354,
+                        city: 'Саратов',
+                        postal_code: '410000'
+                    }
+                },
+                cartData: {
+                    weight: 0.5,
+                    dimensions: {
+                        length: 20,
+                        width: 15,
+                        height: 10
+                    },
+                    value: 1000,
+                    hasRealDimensions: true,
+                    packagesCount: 1
+                }
+            };
+            
+            console.log('🎯 Тестовые данные пункта:', testData.point);
+            console.log('🎯 Тестовые данные корзины:', testData.cartData);
+            console.log('🎯 САРАТОВ ЖЕСТКО ЗАФИКСИРОВАН В PHP!');
+            
+            // Имитация AJAX запроса (пока что просто логирование)
+            console.log('📤 Отправляем AJAX запрос на расчет стоимости...');
+            
+            // Здесь должен быть реальный AJAX запрос к WordPress
+            // Пока что просто показываем что отправили бы
+            const ajaxData = {
+                action: 'calculate_cdek_delivery_cost',
+                point_code: testData.point.code,
+                point_data: JSON.stringify(testData.point),
+                cart_weight: testData.cartData.weight,
+                cart_dimensions: JSON.stringify(testData.cartData.dimensions),
+                cart_value: testData.cartData.value,
+                has_real_dimensions: testData.cartData.hasRealDimensions ? 1 : 0,
+                packages_count: testData.cartData.packagesCount,
+                nonce: 'test_nonce' // В реальности будет настоящий nonce
+            };
+            
+            console.log('📤 Данные AJAX запроса:', ajaxData);
+            console.log('⚠️  ВНИМАНИЕ: Это тестовая страница, для реального теста используйте админку WordPress!');
+            
+            document.getElementById('result').innerHTML = `
+                <div class="success">
+                    <h4>✅ Тест запущен!</h4>
+                    <p>Все логи выводятся в консоль браузера и в панель ниже.</p>
+                    <p>Для реального тестирования используйте кнопку "Детальное тестирование API" в админке WordPress.</p>
+                    <p><strong>ВАЖНО:</strong> Саратов жестко зафиксирован в PHP коде как город отправления!</p>
+                </div>
+            `;
+        }
+        
+        // Запускаем тест при загрузке страницы
+        window.onload = function() {
+            console.log('🚀 Страница тестирования СДЭК загружена');
+            console.log('🏭 САРАТОВ (код 354) жестко зафиксирован в PHP коде!');
+            console.log('📝 Все изменения внесены в cdek-delivery-plugin.php и cdek-delivery.js');
+        };
+    </script>
+</body>
+</html>

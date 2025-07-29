@@ -235,7 +235,10 @@ class CdekDeliveryPlugin {
     }
     
     public function ajax_calculate_delivery_cost() {
+        error_log('🔥 AJAX: Начинаем обработку запроса расчета стоимости СДЭК');
+        
         if (!wp_verify_nonce($_POST['nonce'], 'cdek_nonce')) {
+            error_log('❌ AJAX: Ошибка проверки nonce');
             wp_die('Security check failed');
         }
         
@@ -246,11 +249,11 @@ class CdekDeliveryPlugin {
         $cart_value = floatval($_POST['cart_value']);
         $has_real_dimensions = intval($_POST['has_real_dimensions']);
         
-
-        
-        error_log('СДЭК расчет: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
-        error_log('СДЭК расчет: Размеры: ' . print_r($cart_dimensions, true));
-        error_log('СДЭК расчет: Реальные габариты: ' . ($has_real_dimensions ? 'Да' : 'Нет'));
+        error_log('🔥 AJAX: САРАТОВ ЖЕСТКО ЗАФИКСИРОВАН В PHP!');
+        error_log('🔥 AJAX: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
+        error_log('🔥 AJAX: Размеры: ' . print_r($cart_dimensions, true));
+        error_log('🔥 AJAX: Данные пункта: ' . print_r($point_data, true));
+        error_log('🔥 AJAX: Реальные габариты: ' . ($has_real_dimensions ? 'Да' : 'Нет'));
         
         // Проверяем, что у нас есть все необходимые данные
         if (empty($point_code)) {
@@ -265,25 +268,36 @@ class CdekDeliveryPlugin {
             return;
         }
         
+        error_log('🔥 AJAX: Создаем экземпляр CdekAPI и вызываем расчет');
         $cdek_api = new CdekAPI();
         $cost_data = $cdek_api->calculate_delivery_cost_to_point($point_code, $point_data, $cart_weight, $cart_dimensions, $cart_value, $has_real_dimensions);
         
+        error_log('🔥 AJAX: Получен результат расчета: ' . print_r($cost_data, true));
+        
         if ($cost_data && isset($cost_data['delivery_sum']) && $cost_data['delivery_sum'] > 0) {
-            error_log('СДЭК расчет: ✅ Успешно рассчитана стоимость через НАСТОЯЩИЙ API: ' . $cost_data['delivery_sum']);
+            error_log('🔥 AJAX: ✅ Успешно рассчитана стоимость через API: ' . $cost_data['delivery_sum'] . ' руб.');
             
             // Убедимся что передаем флаг успешного API расчета
             $cost_data['api_success'] = true;
             $cost_data['fallback'] = false;
             
+            error_log('🔥 AJAX: Отправляем успешный ответ в JS');
             wp_send_json_success($cost_data);
         } else {
-            error_log('СДЭК расчет: ❌ API не вернул корректную стоимость.');
-            error_log('СДЭК расчет: Детали ответа API: ' . print_r($cost_data, true));
+            error_log('🔥 AJAX: ❌ API не вернул корректную стоимость!');
+            error_log('🔥 AJAX: Детали ответа API: ' . print_r($cost_data, true));
+            error_log('🔥 AJAX: Отправляем ошибку в JS');
             
             // Возвращаем ошибку - только API расчет
             wp_send_json_error(array(
                 'message' => 'Не удалось рассчитать стоимость доставки СДЭК. Попробуйте выбрать другой пункт выдачи.',
-                'api_response' => $cost_data
+                'api_response' => $cost_data,
+                'debug_info' => array(
+                    'point_code' => $point_code,
+                    'cart_weight' => $cart_weight,
+                    'cart_dimensions' => $cart_dimensions,
+                    'from_saratov_hardcoded' => true
+                )
             ));
         }
     }
@@ -1402,14 +1416,14 @@ class CdekDeliveryPlugin {
             
             // 4. Дополнительный тест - простой запрос тарификации
             error_log('🧪 ТЕСТ: Пробуем простой запрос к API');
-            $simple_data = array(
+                         $simple_data = array(
                 'date' => date('Y-m-d\TH:i:sO'),
                 'type' => 1,
                 'currency' => 1,
                 'lang' => 'rus',
                 'tariff_code' => 136,
-                'from_location' => array('code' => 354),
-                'to_location' => array('code' => 354), // Внутри одного города
+                'from_location' => array('code' => 354), // САРАТОВ - ЖЕСТКО!
+                'to_location' => array('code' => 354), // САРАТОВ - ВНУТРИ ГОРОДА
                 'packages' => array(
                     array(
                         'weight' => 500,
@@ -1859,12 +1873,12 @@ class CdekAPI {
         
         error_log('✅ СДЭК РАСЧЕТ: Токен авторизации получен: ' . substr($token, 0, 20) . '...');
         
-        // Подготавливаем данные для расчета  
-        $sender_city_code = get_option('cdek_sender_city', '354');
-        error_log('🏭 СДЭК РАСЧЕТ: Используем код города отправителя: ' . $sender_city_code);
+        // ЖЕСТКО ФИКСИРУЕМ САРАТОВ - ТОЛЬКО САРАТОВ!
+        $sender_city_code = 354; // САРАТОВ - НЕ МЕНЯЕТСЯ!
+        error_log('🏭 СДЭК РАСЧЕТ: ЖЕСТКО ЗАФИКСИРОВАН САРАТОВ - КОД 354');
         
         $from_location = array(
-            'code' => intval($sender_city_code) // Приводим к int согласно API
+            'code' => 354 // САРАТОВ - ЖЕСТКО ЗАФИКСИРОВАН!
         );
         
         // Определяем локацию назначения
