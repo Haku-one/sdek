@@ -1392,10 +1392,6 @@ jQuery(document).ready(function($) {
             // Убираем фильтрацию по типу - показываем все пункты выдачи
             // if (point.type !== 'PVZ' && point.type) return false;
             
-            // ВРЕМЕННО ОТКЛЮЧАЕМ ФИЛЬТРАЦИЮ ПО ГОРОДУ ДЛЯ ОТЛАДКИ
-            return true;
-            
-            /*
             if (window.currentSearchCity) {
                 var pointCity = '';
                 
@@ -1428,6 +1424,11 @@ jQuery(document).ready(function($) {
                     }
                 }
                 
+                // НОВЫЙ СПОСОБ: ищем в корневом поле city
+                if (!pointCity && point.city) {
+                    pointCity = point.city.trim();
+                }
+                
                 if (pointCity) {
                     pointCity = pointCity.replace(/^(г\.?\s*|город\s+)/i, '').trim();
                 }
@@ -1446,7 +1447,6 @@ jQuery(document).ready(function($) {
             }
             
             return true;
-            */
         });
         
         console.log('🔍 Фильтрация ПВЗ:');
@@ -1466,6 +1466,46 @@ jQuery(document).ready(function($) {
             }
             console.log('- point.name:', points[0].name);
             console.log('- point.address_comment:', points[0].address_comment);
+            console.log('- point.type:', points[0].type);
+            
+            // АНАЛИЗ ТИПОВ ПУНКТОВ
+            var typeStats = {};
+            points.forEach(function(p) {
+                var type = p.type || 'UNKNOWN';
+                if (!typeStats[type]) {
+                    typeStats[type] = 0;
+                }
+                typeStats[type]++;
+            });
+            
+            console.log('📊 СТАТИСТИКА ТИПОВ ПУНКТОВ:');
+            Object.keys(typeStats).forEach(function(type) {
+                console.log('- ' + type + ': ' + typeStats[type] + ' пунктов');
+            });
+            
+            // АНАЛИЗ ДЛЯ КОНКРЕТНОГО ГОРОДА
+            if (window.currentSearchCity && window.currentSearchCity.toLowerCase().includes('москва')) {
+                var moscowPoints = points.filter(function(p) {
+                    return (p.city && p.city.toLowerCase().includes('москва')) ||
+                           (p.location && p.location.city && p.location.city.toLowerCase().includes('москва'));
+                });
+                
+                var moscowTypeStats = {};
+                moscowPoints.forEach(function(p) {
+                    var type = p.type || 'UNKNOWN';
+                    if (!moscowTypeStats[type]) {
+                        moscowTypeStats[type] = 0;
+                    }
+                    moscowTypeStats[type]++;
+                });
+                
+                console.log('🏛️ СТАТИСТИКА ТИПОВ ДЛЯ МОСКВЫ:');
+                Object.keys(moscowTypeStats).forEach(function(type) {
+                    console.log('- ' + type + ': ' + moscowTypeStats[type] + ' пунктов');
+                });
+                
+                console.log('🏛️ Всего пунктов в Москве без фильтрации по типу:', moscowPoints.length);
+            }
         }
         
         // Показываем примеры отфильтрованных пунктов
