@@ -1653,6 +1653,8 @@ jQuery(document).ready(function($) {
     // ========== ФУНКЦИИ ВЫБОРА ПУНКТА ==========
     
     window.selectCdekPoint = function(point) {
+        console.log('CDEK Point selected:', point);
+        
         // Сохраняем выбранный пункт
         selectedPoint = point;
         
@@ -1678,8 +1680,10 @@ jQuery(document).ready(function($) {
                 name: 'cdek_selected_point_code',
                 value: point.code
             }).appendTo('form.checkout, form.woocommerce-checkout');
+            console.log('Created cdek_selected_point_code field with value:', point.code);
         } else {
             $('#cdek-selected-point-code').val(point.code);
+            console.log('Updated cdek_selected_point_code field with value:', point.code);
         }
         
         if ($('#cdek-selected-point-data').length === 0) {
@@ -1890,8 +1894,10 @@ jQuery(document).ready(function($) {
                 name: 'cdek_delivery_cost',
                 value: deliveryCost
             }).appendTo('form.checkout, form.woocommerce-checkout');
+            console.log('Created cdek-delivery-cost field with value:', deliveryCost);
         } else {
             $('#cdek-delivery-cost').val(deliveryCost);
+            console.log('Updated cdek-delivery-cost field with value:', deliveryCost);
         }
         
         $(document.body).trigger('updated_checkout');

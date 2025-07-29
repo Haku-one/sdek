@@ -61,6 +61,12 @@ class CdekDeliveryPlugin {
         // НОВОЕ: Добавляем информацию о доставке в email уведомления
         add_action('woocommerce_email_order_details', array($this, 'add_cdek_info_to_email'), 20, 4);
         
+        // НОВОЕ: Добавляем информацию о доставке на страницу заказа (thank you page)
+        add_action('woocommerce_order_details_after_order_table', array($this, 'display_cdek_info_on_order_page'));
+        
+        // НОВОЕ: Обновляем стоимость доставки в заказе
+        add_action('woocommerce_checkout_update_order_meta', array($this, 'update_order_shipping_cost'), 20, 1);
+        
         // AJAX для проверки подключения
         add_action('wp_ajax_test_cdek_connection', array($this, 'ajax_test_cdek_connection'));
         
@@ -426,9 +432,14 @@ class CdekDeliveryPlugin {
     }
     
     public function save_cdek_point_data($order_id) {
+        // ОТЛАДКА: Логируем получение данных СДЭК
+        error_log('CDEK DEBUG: Saving order data for order ID: ' . $order_id);
+        error_log('CDEK DEBUG: POST data: ' . print_r($_POST, true));
+        
         // Сохраняем код и данные пункта выдачи
         if (isset($_POST['cdek_selected_point_code']) && !empty($_POST['cdek_selected_point_code'])) {
             update_post_meta($order_id, '_cdek_point_code', sanitize_text_field($_POST['cdek_selected_point_code']));
+            error_log('CDEK DEBUG: Saved point code: ' . $_POST['cdek_selected_point_code']);
         }
         
         if (isset($_POST['cdek_selected_point_data']) && !empty($_POST['cdek_selected_point_data'])) {
@@ -456,7 +467,11 @@ class CdekDeliveryPlugin {
         
         // НОВОЕ: Сохраняем стоимость доставки
         if (isset($_POST['cdek_delivery_cost']) && !empty($_POST['cdek_delivery_cost'])) {
-            update_post_meta($order_id, '_cdek_delivery_cost', floatval($_POST['cdek_delivery_cost']));
+            $delivery_cost = floatval($_POST['cdek_delivery_cost']);
+            update_post_meta($order_id, '_cdek_delivery_cost', $delivery_cost);
+            error_log('CDEK DEBUG: Saved delivery cost: ' . $delivery_cost);
+        } else {
+            error_log('CDEK DEBUG: No delivery cost in POST data');
         }
         
         // НОВОЕ: Сохраняем детали товаров для отчетности
@@ -726,6 +741,114 @@ class CdekDeliveryPlugin {
                 echo '</div>';
                 
                 echo '</div>';
+            }
+        }
+    }
+    
+    // НОВОЕ: Отображение информации о СДЭК на странице заказа (thank you page)
+    public function display_cdek_info_on_order_page($order) {
+        $point_code = get_post_meta($order->get_id(), '_cdek_point_code', true);
+        $point_data = get_post_meta($order->get_id(), '_cdek_point_data', true);
+        $cart_dimensions = get_post_meta($order->get_id(), '_cdek_cart_dimensions', true);
+        $cart_weight = get_post_meta($order->get_id(), '_cdek_cart_weight', true);
+        $delivery_cost = get_post_meta($order->get_id(), '_cdek_delivery_cost', true);
+        
+        // Отображаем информацию если есть данные о доставке СДЭК
+        if ($point_code || $cart_dimensions || $cart_weight) {
+            echo '<section class="woocommerce-cdek-details">';
+            echo '<h2 class="woocommerce-order-details__title">📦 Информация о доставке СДЭК</h2>';
+            
+            if ($point_code && $point_data) {
+                echo '<div class="cdek-point-details" style="margin: 20px 0; padding: 20px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;">';
+                echo '<h3 style="color: #28a745; margin: 0 0 15px 0;">🏪 Пункт выдачи</h3>';
+                
+                $point_name = isset($point_data['name']) ? $point_data['name'] : 'Пункт выдачи СДЭК';
+                $point_address = isset($point_data['location']['address_full']) ? $point_data['location']['address_full'] : 
+                               (isset($point_data['location']['address']) ? $point_data['location']['address'] : 'Адрес не указан');
+                
+                echo '<p><strong>Название:</strong> ' . esc_html($point_name) . '</p>';
+                echo '<p><strong>Код пункта:</strong> ' . esc_html($point_code) . '</p>';
+                echo '<p><strong>Адрес:</strong> ' . esc_html($point_address) . '</p>';
+                
+                if (isset($point_data['phone']) && $point_data['phone']) {
+                    echo '<p><strong>Телефон:</strong> ' . esc_html($point_data['phone']) . '</p>';
+                }
+                
+                if (isset($point_data['work_time']) && $point_data['work_time']) {
+                    echo '<p><strong>Время работы:</strong> ' . esc_html($point_data['work_time']) . '</p>';
+                }
+                
+                if ($delivery_cost) {
+                    echo '<p><strong>Стоимость доставки:</strong> ' . number_format($delivery_cost, 0) . ' руб.</p>';
+                }
+                
+                echo '</div>';
+            }
+            
+            if ($cart_dimensions || $cart_weight) {
+                echo '<div class="cdek-package-details" style="margin: 20px 0; padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">';
+                echo '<h3 style="color: #856404; margin: 0 0 15px 0;">📏 Габариты и вес посылки</h3>';
+                
+                if ($cart_dimensions) {
+                    echo '<p><strong>Размеры:</strong> ' . 
+                         esc_html($cart_dimensions['length']) . ' × ' . 
+                         esc_html($cart_dimensions['width']) . ' × ' . 
+                         esc_html($cart_dimensions['height']) . ' см</p>';
+                    
+                    $volume = $cart_dimensions['length'] * $cart_dimensions['width'] * $cart_dimensions['height'];
+                    echo '<p><strong>Объем:</strong> ' . number_format($volume, 2) . ' см³</p>';
+                }
+                
+                if ($cart_weight) {
+                    echo '<p><strong>Вес:</strong> ' . number_format($cart_weight, 0) . ' г</p>';
+                }
+                
+                echo '</div>';
+            }
+            
+            echo '</section>';
+        }
+    }
+    
+    // НОВОЕ: Обновляем стоимость доставки в заказе
+    public function update_order_shipping_cost($order_id) {
+        // Проверяем, есть ли стоимость доставки СДЭК
+        if (isset($_POST['cdek_delivery_cost']) && !empty($_POST['cdek_delivery_cost'])) {
+            $delivery_cost = floatval($_POST['cdek_delivery_cost']);
+            
+            if ($delivery_cost > 0) {
+                $order = wc_get_order($order_id);
+                
+                if ($order) {
+                    // Ищем метод доставки СДЭК в заказе
+                    $shipping_methods = $order->get_shipping_methods();
+                    
+                    foreach ($shipping_methods as $shipping_method) {
+                        if (strpos($shipping_method->get_method_id(), 'cdek_delivery') !== false) {
+                            // Обновляем стоимость доставки
+                            $shipping_method->set_total($delivery_cost);
+                            
+                            // Обновляем название метода доставки с выбранным пунктом
+                            if (isset($_POST['cdek_selected_point_data']) && !empty($_POST['cdek_selected_point_data'])) {
+                                $point_data = json_decode(stripslashes($_POST['cdek_selected_point_data']), true);
+                                if ($point_data && isset($point_data['name'])) {
+                                    $point_name = $point_data['name'];
+                                    $city = isset($point_data['location']['city']) ? $point_data['location']['city'] : '';
+                                    
+                                    $new_title = $city ? $city . ', ' . $point_name : $point_name;
+                                    $shipping_method->set_method_title($new_title);
+                                }
+                            }
+                            
+                            $shipping_method->save();
+                            break;
+                        }
+                    }
+                    
+                    // Пересчитываем общую стоимость заказа
+                    $order->calculate_totals();
+                    $order->save();
+                }
             }
         }
     }
