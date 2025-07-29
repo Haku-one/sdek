@@ -993,7 +993,7 @@ class CdekAPI {
             $params = array(
                 'type' => 'PVZ',
                 'country_code' => 'RU',
-                'size' => isset($strategy['broad_search']) ? '100' : '50' // ИСПРАВЛЕНИЕ: Уменьшаем лимит
+                'size' => isset($strategy['broad_search']) ? '1000' : '500'
             );
             
             // Добавляем ограничения по весу и габаритам если указаны
@@ -1092,11 +1092,7 @@ class CdekAPI {
                         }
                     }
                     
-                    // ИСПРАВЛЕНИЕ: Финальное ограничение количества результатов
-                    if (count($data) > 100) {
-                        error_log('СДЭК API: ⚠️ Слишком много результатов (' . count($data) . '), ограничиваем до 100');
-                        $data = array_slice($data, 0, 100);
-                    }
+                    // Убрано ограничение количества результатов
                     
                     return $data;
                 } else {
