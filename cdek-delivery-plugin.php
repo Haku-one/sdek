@@ -278,23 +278,12 @@ class CdekDeliveryPlugin {
         } else {
             error_log('СДЭК расчет: ❌ API не вернул корректную стоимость.');
             error_log('СДЭК расчет: Детали ответа API: ' . print_r($cost_data, true));
-            error_log('СДЭК расчет: 🔄 Используем FALLBACK расчет');
             
-            // ИСПОЛЬЗУЕМ РЕЗЕРВНЫЙ РАСЧЕТ
-            $fallback_cost = $this->calculate_fallback_cost($cart_weight, $cart_value, $cart_dimensions, $has_real_dimensions);
-            
-            error_log('СДЭК расчет: ✅ Fallback расчет: ' . $fallback_cost . ' руб.');
-            
-            wp_send_json_success(array(
-                'delivery_sum' => $fallback_cost,
-                'period_min' => 2,
-                'period_max' => 5,
-                'api_success' => false,
-                'fallback' => true,
-                'message' => 'Использован резервный расчет (API недоступен)'
+            // Возвращаем ошибку - только API расчет
+            wp_send_json_error(array(
+                'message' => 'Не удалось рассчитать стоимость доставки СДЭК. Попробуйте выбрать другой пункт выдачи.',
+                'api_response' => $cost_data
             ));
-        }
-    }
         }
     }
     
@@ -379,31 +368,7 @@ class CdekDeliveryPlugin {
         }
     }
     
-    private function calculate_fallback_cost($weight, $value, $dimensions, $has_real_dimensions) {
-        $base_cost = 300; // Базовая стоимость
-        
-        // Дополнительная стоимость за вес свыше 500г
-        if ($weight > 500) {
-            $extra_weight = ceil(($weight - 500) / 500);
-            $base_cost += $extra_weight * 35;
-        }
-        
-        // Дополнительная стоимость за габариты
-        if ($has_real_dimensions && $dimensions) {
-            $volume = $dimensions['length'] * $dimensions['width'] * $dimensions['height'];
-            if ($volume > 12000) {
-                $extra_volume = ceil(($volume - 12000) / 6000);
-                $base_cost += $extra_volume * 50;
-            }
-        }
-        
-        // Страховка за высокую стоимость
-        if ($value > 3000) {
-            $base_cost += ceil(($value - 3000) / 1000) * 20;
-        }
-        
-        return $base_cost;
-    }
+
     
     public function display_product_dimensions_checkout() {
         // Получаем товары из корзины
