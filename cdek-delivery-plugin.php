@@ -3,7 +3,7 @@
  * Plugin Name: СДЭК Доставка для WooCommerce
  * Plugin URI: https://yoursite.com
  * Description: Плагин для интеграции доставки СДЭК с упрощенной формой адреса и картой пунктов выдачи
- * Version: 2.6.2
+ * Version: 2.7.0
  * Author: Your Name
  * Requires at least: 5.0
  * Tested up to: 6.4
@@ -24,7 +24,7 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 
 define('CDEK_DELIVERY_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CDEK_DELIVERY_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('CDEK_DELIVERY_VERSION', '2.6.2');
+define('CDEK_DELIVERY_VERSION', '2.7.0');
 
 // Основной класс плагина
 class CdekDeliveryPlugin {
@@ -32,6 +32,9 @@ class CdekDeliveryPlugin {
     public function __construct() {
         add_action('init', array($this, 'init'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
+        
+        // Логирование версий для диагностики
+        add_action('wp_loaded', array($this, 'log_compatibility_info'));
         
         // Хуки для настройки полей адреса
         add_filter('woocommerce_checkout_fields', array($this, 'customize_checkout_fields'));
@@ -52,10 +55,13 @@ class CdekDeliveryPlugin {
         // Регистрация настроек плагина
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
-        // Сохранение данных о выбранном пункте выдачи - МНОЖЕСТВЕННЫЕ ХУКИ
+        // Сохранение данных о выбранном пункте выдачи - СОВМЕСТИМОСТЬ С РАЗНЫМИ ВЕРСИЯМИ WC
         add_action('woocommerce_checkout_update_order_meta', array($this, 'save_cdek_point_data'));
-        add_action('woocommerce_store_api_checkout_update_order_meta', array($this, 'save_cdek_point_data'));
-        add_action('woocommerce_blocks_checkout_update_order_meta', array($this, 'save_cdek_point_data'));
+        
+        // Для WooCommerce Blocks (новые версии)
+        if (function_exists('wc_get_container') && class_exists('Automattic\WooCommerce\StoreApi\StoreApi')) {
+            add_action('woocommerce_store_api_checkout_update_order_meta', array($this, 'save_cdek_point_data'));
+        }
         
         // Отображение информации о пункте выдачи в админке
         add_action('woocommerce_admin_order_data_after_shipping_address', array($this, 'display_cdek_point_in_admin'));
@@ -99,6 +105,28 @@ class CdekDeliveryPlugin {
     
     public function init() {
         load_plugin_textdomain('cdek-delivery', false, dirname(plugin_basename(__FILE__)) . '/languages');
+    }
+    
+    public function log_compatibility_info() {
+        // Логируем информацию о совместимости только в режиме отладки
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('CDEK PLUGIN v' . CDEK_DELIVERY_VERSION . ' - Информация о совместимости:');
+            error_log('WordPress: ' . get_bloginfo('version'));
+            error_log('WooCommerce: ' . (defined('WC_VERSION') ? WC_VERSION : 'не установлен'));
+            error_log('PHP: ' . phpversion());
+            
+            // Проверяем доступность Store API
+            if (class_exists('Automattic\WooCommerce\StoreApi\StoreApi')) {
+                error_log('WooCommerce Store API: доступен');
+            } else {
+                error_log('WooCommerce Store API: недоступен');
+            }
+            
+            // Проверяем deprecated warnings
+            if (version_compare(WC_VERSION, '7.2.0', '>=')) {
+                error_log('WooCommerce Blocks: используем актуальные хуки (woocommerce_store_api_checkout_update_order_meta)');
+            }
+        }
     }
     
     public function enqueue_scripts() {
