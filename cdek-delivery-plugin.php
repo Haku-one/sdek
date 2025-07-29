@@ -76,7 +76,7 @@ class CdekDeliveryPlugin {
         add_action('woocommerce_checkout_update_order_meta', array($this, 'update_order_shipping_cost'), 20, 1);
         
         // НОВОЕ: Дополнительные хуки для блоков WooCommerce
-        add_action('rest_api_init', array($this, 'register_rest_fields'));
+        add_action('woocommerce_loaded', array($this, 'register_rest_fields'));
         add_action('woocommerce_rest_checkout_process_payment', array($this, 'save_cdek_data_from_rest'), 10, 2);
         
         // Правильные хуки для Store API
@@ -777,10 +777,20 @@ class CdekDeliveryPlugin {
      * Регистрация интеграции с WooCommerce Blocks
      */
     public function register_blocks_integration() {
-        if (class_exists('Automattic\WooCommerce\Blocks\Integrations\IntegrationRegistry')) {
-            $container = \Automattic\WooCommerce\Blocks\Package::container();
-            $container->get(\Automattic\WooCommerce\Blocks\Integrations\IntegrationRegistry::class)
-                ->register(new WC_Cdek_Blocks_Integration());
+        try {
+            if (class_exists('Automattic\WooCommerce\Blocks\Integrations\IntegrationRegistry') && 
+                class_exists('WC_Cdek_Blocks_Integration')) {
+                $container = \Automattic\WooCommerce\Blocks\Package::container();
+                $container->get(\Automattic\WooCommerce\Blocks\Integrations\IntegrationRegistry::class)
+                    ->register(new WC_Cdek_Blocks_Integration());
+                error_log('CDEK: Blocks integration зарегистрирована');
+            } else {
+                error_log('CDEK: Не удалось зарегистрировать blocks integration - отсутствуют классы');
+            }
+        } catch (Exception $e) {
+            error_log('CDEK: Ошибка регистрации blocks integration: ' . $e->getMessage());
+        } catch (Error $e) {
+            error_log('CDEK: Фатальная ошибка при регистрации blocks integration: ' . $e->getMessage());
         }
     }
     
@@ -1873,11 +1883,6 @@ class CdekAPI {
             add_action('woocommerce_store_api_checkout_update_order_meta', array($this, 'save_cdek_data_from_store_api'));
             add_filter('woocommerce_store_api_checkout_order_received_object', array($this, 'add_cdek_data_to_order_response'), 10, 3);
             
-            // Добавляем поддержку для hydration requests (WooCommerce 8.9+)
-            if (function_exists('add_filter')) {
-                add_filter('woocommerce_hydration_request_after_callbacks', array($this, 'add_cdek_data_to_order_response'), 10, 3);
-            }
-            
             error_log('CDEK: REST поля успешно зарегистрированы');
             
         } catch (Exception $e) {
@@ -1914,6 +1919,33 @@ class CdekAPI {
         }
         
         return $response;
+    }
+    
+    /**
+     * Инициализация поддержки Store API
+     */
+    public function init_store_api_support() {
+        try {
+            error_log('CDEK: Инициализация поддержки Store API');
+            
+            // Проверяем что WooCommerce загружен
+            if (!class_exists('WooCommerce')) {
+                error_log('CDEK: WooCommerce не найден при инициализации Store API');
+                return;
+            }
+            
+            // Проверяем доступность Store API
+            if (class_exists('Automattic\WooCommerce\StoreApi\StoreApi')) {
+                error_log('CDEK: Store API доступен');
+            } else {
+                error_log('CDEK: Store API недоступен');
+            }
+            
+        } catch (Exception $e) {
+            error_log('CDEK: Ошибка инициализации Store API: ' . $e->getMessage());
+        } catch (Error $e) {
+            error_log('CDEK: Фатальная ошибка при инициализации Store API: ' . $e->getMessage());
+        }
     }
     
     /**
