@@ -309,3 +309,73 @@
     margin-top: 0;
     color: #333;
 }
+
+/* Улучшенные стили для ошибок поиска ПВЗ */
+.pvz-error {
+    text-align: center;
+    padding: 20px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.pvz-error span {
+    font-size: 16px;
+    color: #856404;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 15px;
+}
+
+.pvz-suggestions {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 15px;
+    margin-top: 15px;
+    text-align: left;
+}
+
+.pvz-suggestions small {
+    color: #6c757d;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.pvz-suggestions ul {
+    margin: 0;
+    padding-left: 20px;
+    list-style-type: disc;
+}
+
+.pvz-suggestions li {
+    color: #495057;
+    margin-bottom: 5px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.pvz-suggestions li:last-child {
+    margin-bottom: 0;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+    .pvz-error {
+        padding: 15px;
+        margin: 8px 0;
+    }
+    
+    .pvz-error span {
+        font-size: 15px;
+    }
+    
+    .pvz-suggestions {
+        padding: 12px;
+    }
+    
+    .pvz-suggestions li {
+        font-size: 13px;
+    }
+}
