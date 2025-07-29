@@ -93,6 +93,7 @@ class CdekDeliveryPlugin {
         
         // AJAX для тестирования расчета стоимости
         add_action('wp_ajax_test_cdek_calculation', array($this, 'ajax_test_cdek_calculation'));
+        add_action('wp_ajax_test_cdek_api_detailed', array($this, 'ajax_test_cdek_api_detailed'));
         
 
         
@@ -820,6 +821,28 @@ class CdekDeliveryPlugin {
         }
     }
     
+    public function ajax_test_cdek_api_detailed() {
+        if (!wp_verify_nonce($_POST['nonce'], 'test_cdek_api_detailed')) {
+            wp_die('Security check failed');
+        }
+        
+        error_log('🚀 ЗАПУСК ДЕТАЛЬНОГО ТЕСТИРОВАНИЯ API СДЭК');
+        
+        $cdek_api = new CdekAPI();
+        $result = $cdek_api->test_cdek_api_detailed();
+        
+        if ($result) {
+            wp_send_json_success(array(
+                'message' => '✅ Детальное тестирование завершено успешно! Стоимость: ' . $result['delivery_sum'] . ' руб.',
+                'result' => $result
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => '❌ Детальное тестирование не прошло. Проверьте логи для диагностики.'
+            ));
+        }
+    }
+    
 
     
     public function activate_plugin() {
@@ -1325,6 +1348,99 @@ class CdekDeliveryPlugin {
             error_log('CDEK Store API: Фатальная ошибка: ' . $e->getMessage());
         }
     }
+    
+    public function test_cdek_api_detailed() {
+        error_log('🧪 ТЕСТ API СДЭК: Начинаем детальное тестирование');
+        
+        // 1. Проверяем настройки
+        $account = get_option('cdek_account');
+        $password = get_option('cdek_password');
+        $sender_city = get_option('cdek_sender_city', '354');
+        
+        error_log('🧪 ТЕСТ: Account: ' . substr($account, 0, 10) . '...');
+        error_log('🧪 ТЕСТ: Password: ' . (empty($password) ? 'НЕ ЗАДАН' : 'ЗАДАН'));
+        error_log('🧪 ТЕСТ: Sender City: ' . $sender_city);
+        
+        if (empty($account) || empty($password)) {
+            error_log('❌ ТЕСТ: Не заданы учетные данные API');
+            return false;
+        }
+        
+        // 2. Проверяем получение токена
+        $token = $this->get_auth_token();
+        if (!$token) {
+            error_log('❌ ТЕСТ: Не удалось получить токен');
+            return false;
+        }
+        error_log('✅ ТЕСТ: Токен получен: ' . substr($token, 0, 20) . '...');
+        
+        // 3. Тестируем расчет к известному ПВЗ в Саратове
+        $test_point_data = array(
+            'code' => 'SAR96',
+            'location' => array(
+                'city_code' => 354,
+                'city' => 'Саратов',
+                'postal_code' => '410000'
+            )
+        );
+        
+        $test_dimensions = array(
+            'length' => 20,
+            'width' => 15,
+            'height' => 10
+        );
+        
+        error_log('🧪 ТЕСТ: Тестируем расчет к ПВЗ SAR96 в Саратове');
+        
+        $result = $this->calculate_delivery_cost_to_point('SAR96', $test_point_data, 0.5, $test_dimensions, 1000, 1);
+        
+        if ($result && isset($result['delivery_sum']) && $result['delivery_sum'] > 0) {
+            error_log('✅ ТЕСТ: Успешный расчет стоимости: ' . $result['delivery_sum'] . ' руб.');
+            return $result;
+        } else {
+            error_log('❌ ТЕСТ: Неудачный расчет. Результат: ' . print_r($result, true));
+            
+            // 4. Дополнительный тест - простой запрос тарификации
+            error_log('🧪 ТЕСТ: Пробуем простой запрос к API');
+            $simple_data = array(
+                'date' => date('Y-m-d\TH:i:sO'),
+                'type' => 1,
+                'currency' => 1,
+                'lang' => 'rus',
+                'tariff_code' => 136,
+                'from_location' => array('code' => 354),
+                'to_location' => array('code' => 354), // Внутри одного города
+                'packages' => array(
+                    array(
+                        'weight' => 500,
+                        'length' => 20,
+                        'width' => 15,
+                        'height' => 10
+                    )
+                )
+            );
+            
+            $response = wp_remote_post($this->base_url . '/calculator/tariff', array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $token,
+                    'Content-Type' => 'application/json'
+                ),
+                'body' => json_encode($simple_data),
+                'timeout' => 30
+            ));
+            
+            if (!is_wp_error($response)) {
+                $body = wp_remote_retrieve_body($response);
+                $code = wp_remote_retrieve_response_code($response);
+                error_log('🧪 ТЕСТ: Простой запрос - HTTP код: ' . $code);
+                error_log('🧪 ТЕСТ: Простой запрос - Ответ: ' . $body);
+            } else {
+                error_log('❌ ТЕСТ: Ошибка простого запроса: ' . $response->get_error_message());
+            }
+            
+            return false;
+        }
+    }
 }
 
 // Класс для работы с СДЭК API
@@ -1732,6 +1848,8 @@ class CdekAPI {
     
     public function calculate_delivery_cost_to_point($point_code, $point_data, $cart_weight, $cart_dimensions, $cart_value, $has_real_dimensions) {
         error_log('🎯 СДЭК РАСЧЕТ: Начинаем расчет для пункта ' . $point_code);
+        error_log('🎯 СДЭК РАСЧЕТ: Данные пункта: ' . print_r($point_data, true));
+        error_log('🎯 СДЭК РАСЧЕТ: Параметры груза - Вес: ' . $cart_weight . ', Габариты: ' . print_r($cart_dimensions, true) . ', Стоимость: ' . $cart_value);
         
         $token = $this->get_auth_token();
         if (!$token) {
@@ -1742,8 +1860,11 @@ class CdekAPI {
         error_log('✅ СДЭК РАСЧЕТ: Токен авторизации получен: ' . substr($token, 0, 20) . '...');
         
         // Подготавливаем данные для расчета  
+        $sender_city_code = get_option('cdek_sender_city', '354');
+        error_log('🏭 СДЭК РАСЧЕТ: Используем код города отправителя: ' . $sender_city_code);
+        
         $from_location = array(
-            'code' => get_option('cdek_sender_city', '354') // Саратов (правильный код 354 для API)
+            'code' => intval($sender_city_code) // Приводим к int согласно API
         );
         
         // Определяем локацию назначения
@@ -1854,17 +1975,26 @@ class CdekAPI {
             return false;
         }
         
-        // Подготавливаем данные о посылках
+        // Подготавливаем данные о посылках с валидацией
+        $weight = max(100, intval($cart_weight * 1000)); // Переводим в граммы, минимум 100г
+        $length = max(1, intval($cart_dimensions['length'])); // Минимум 1см согласно API
+        $width = max(1, intval($cart_dimensions['width'])); // Минимум 1см согласно API  
+        $height = max(1, intval($cart_dimensions['height'])); // Минимум 1см согласно API
+        
+        error_log('📦 СДЭК РАСЧЕТ: Исходный вес (кг): ' . $cart_weight . ', итоговый вес (г): ' . $weight);
+        error_log('📦 СДЭК РАСЧЕТ: Исходные габариты (см): ' . $cart_dimensions['length'] . 'x' . $cart_dimensions['width'] . 'x' . $cart_dimensions['height']);
+        error_log('📦 СДЭК РАСЧЕТ: Итоговые габариты (см): ' . $length . 'x' . $width . 'x' . $height);
+        
         $packages = array(
             array(
-                'weight' => max(100, intval($cart_weight)), // Минимум 100г
-                'length' => max(10, intval($cart_dimensions['length'])), // Минимум 10см
-                'width' => max(10, intval($cart_dimensions['width'])), // Минимум 10см
-                'height' => max(5, intval($cart_dimensions['height'])) // Минимум 5см
+                'weight' => $weight,
+                'length' => $length,
+                'width' => $width,
+                'height' => $height
             )
         );
         
-        error_log('СДЭК API: Подготовленная посылка: ' . print_r($packages[0], true));
+        error_log('📦 СДЭК API: Подготовленная посылка: ' . print_r($packages[0], true));
         
         // Определяем тариф для доставки ИЗ САРАТОВА до пункта выдачи
         // 136 - Посылка склад-постамат/пункт выдачи (ПРАВИЛЬНЫЙ для ПВЗ)
@@ -1946,15 +2076,8 @@ class CdekAPI {
         if ($response_code === 200 && $parsed_body) {
             error_log('✅ СДЭК API: Успешный HTTP ответ, разбираем JSON: ' . print_r($parsed_body, true));
             
-            if (isset($parsed_body['delivery_sum']) && $parsed_body['delivery_sum'] > 0) {
-                error_log('🎉 СДЭК API: Успешно получена стоимость от API: ' . $parsed_body['delivery_sum'] . ' руб.');
-                return array(
-                    'delivery_sum' => intval($parsed_body['delivery_sum']),
-                    'period_min' => isset($parsed_body['period_min']) ? $parsed_body['period_min'] : null,
-                    'period_max' => isset($parsed_body['period_max']) ? $parsed_body['period_max'] : null,
-                    'api_success' => true
-                );
-            } elseif (isset($parsed_body['errors']) && !empty($parsed_body['errors'])) {
+            // Проверяем наличие ошибок в ответе в первую очередь
+            if (isset($parsed_body['errors']) && !empty($parsed_body['errors'])) {
                 error_log('❌ СДЭК API: API вернул ошибки: ' . print_r($parsed_body['errors'], true));
                 
                 // Анализируем ошибки для понимания проблемы
@@ -1966,21 +2089,48 @@ class CdekAPI {
                         switch ($error['code']) {
                             case 'v2_entity_not_found':
                                 error_log('💡 СДЭК API: Пункт выдачи или город не найден в базе СДЭК');
+                                error_log('💡 СДЭК API: Проверьте код города отправителя: ' . $from_location['code']);
+                                error_log('💡 СДЭК API: Проверьте данные получателя: ' . print_r($to_location, true));
                                 break;
                             case 'v2_tariff_not_found':
-                                error_log('💡 СДЭК API: Тариф не доступен для данного направления');
+                                error_log('💡 СДЭК API: Тариф ' . $tariff_code . ' не доступен для направления ' . $from_location['code'] . ' -> ' . (isset($to_location['code']) ? $to_location['code'] : 'undefined'));
+                                return $this->try_alternative_calculation($data, $token);
                                 break;
                             case 'invalid_token':
-                                error_log('💡 СДЭК API: Токен авторизации истек или неверен');
+                                error_log('💡 СДЭК API: Токен авторизации истек или неверен, очищаем кэш');
+                                delete_transient('cdek_auth_token');
+                                return false;
+                                break;
+                            case 'v2_validation_error':
+                                error_log('💡 СДЭК API: Ошибка валидации данных запроса');
+                                error_log('💡 СДЭК API: Проверьте корректность параметров: ' . print_r($data, true));
                                 break;
                             default:
-                                error_log('💡 СДЭК API: Неизвестная ошибка, проверьте документацию API');
+                                error_log('💡 СДЭК API: Неизвестная ошибка ' . $error['code'] . ', проверьте документацию API');
                         }
                     }
                 }
                 
                 // Пробуем альтернативный способ расчета
                 return $this->try_alternative_calculation($data, $token);
+            } elseif (isset($parsed_body['delivery_sum']) && $parsed_body['delivery_sum'] > 0) {
+                // Успешный расчет стоимости
+                error_log('🎉 СДЭК API: Успешно получена стоимость от API: ' . $parsed_body['delivery_sum'] . ' руб.');
+                
+                // Проверяем предупреждения если есть
+                if (isset($parsed_body['warnings']) && !empty($parsed_body['warnings'])) {
+                    error_log('⚠️ СДЭК API: Предупреждения: ' . print_r($parsed_body['warnings'], true));
+                }
+                
+                return array(
+                    'delivery_sum' => intval($parsed_body['delivery_sum']),
+                    'period_min' => isset($parsed_body['period_min']) ? $parsed_body['period_min'] : null,
+                    'period_max' => isset($parsed_body['period_max']) ? $parsed_body['period_max'] : null,
+                    'total_sum' => isset($parsed_body['total_sum']) ? intval($parsed_body['total_sum']) : intval($parsed_body['delivery_sum']),
+                    'currency' => isset($parsed_body['currency']) ? $parsed_body['currency'] : 'RUB',
+                    'weight_calc' => isset($parsed_body['weight_calc']) ? $parsed_body['weight_calc'] : $weight,
+                    'api_success' => true
+                );
             } else {
                 error_log('⚠️ СДЭК API: API вернул ответ без delivery_sum: ' . print_r($parsed_body, true));
                 
@@ -2003,32 +2153,37 @@ class CdekAPI {
     }
     
     private function try_alternative_calculation($original_data, $token) {
-        error_log('СДЭК расчет: Пробуем альтернативный метод расчета');
+        error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ РАСЧЕТ: Пробуем альтернативные тарифы');
         
-        // Попробуем разные тарифы ИЗ САРАТОВА
-        $alternative_tariffs = [136, 138, 233, 234]; // ПВЗ, Постамат, Эконом, Стандарт
+        // Попробуем разные тарифы для ПВЗ и курьерской доставки
+        $alternative_tariffs = [
+            136 => 'Посылка склад-постамат/ПВЗ',
+            138 => 'Посылка дверь-постамат', 
+            233 => 'Эконом посылка склад-дверь',
+            234 => 'Стандарт посылка склад-дверь',
+            62 => 'Магистральный экспресс склад-склад',
+            63 => 'Магистральный экспресс склад-дверь'
+        ];
         
-        foreach ($alternative_tariffs as $tariff) {
+        foreach ($alternative_tariffs as $tariff => $tariff_name) {
+            error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ: Пробуем тариф ' . $tariff . ' (' . $tariff_name . ')');
+            
             $data = $original_data;
             $data['tariff_code'] = $tariff;
             
-            // Добавляем недостающие поля если их нет
-            if (!isset($data['date'])) {
-                $data['date'] = date('Y-m-d\TH:i:sO');
-            }
-            if (!isset($data['currency'])) {
-                $data['currency'] = 1; // RUB
-            }
-            if (!isset($data['lang'])) {
-                $data['lang'] = 'rus';
+            // Валидация обязательных полей согласно API
+            $data['date'] = isset($data['date']) ? $data['date'] : date('Y-m-d\TH:i:sO');
+            $data['type'] = isset($data['type']) ? $data['type'] : 1;
+            $data['currency'] = isset($data['currency']) ? $data['currency'] : 1;
+            $data['lang'] = isset($data['lang']) ? $data['lang'] : 'rus';
+            
+            // Если нет кода города назначения, попробуем с почтовым индексом или названием
+            if (!isset($data['to_location']['code']) && !isset($data['to_location']['postal_code']) && !isset($data['to_location']['city'])) {
+                error_log('⚠️ СДЭК АЛЬТЕРНАТИВНЫЙ: Не указана локация назначения, пропускаем тариф ' . $tariff);
+                continue;
             }
             
-            // Упростим локацию - используем только город Москва если не указано
-            if (!isset($data['to_location']['code'])) {
-                $data['to_location'] = array('code' => 44); // Москва
-            }
-            
-            error_log('СДЭК расчет: Пробуем тариф ' . $tariff . ' с данными: ' . print_r($data, true));
+            error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ: Данные для тарифа ' . $tariff . ': ' . json_encode($data, JSON_UNESCAPED_UNICODE));
             
             $response = wp_remote_post($this->base_url . '/calculator/tariff', array(
                 'headers' => array(
@@ -2041,19 +2196,37 @@ class CdekAPI {
             
             if (!is_wp_error($response)) {
                 $response_code = wp_remote_retrieve_response_code($response);
+                $response_body = wp_remote_retrieve_body($response);
+                error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ: Ответ для тарифа ' . $tariff . ' - HTTP: ' . $response_code . ', Тело: ' . substr($response_body, 0, 300) . '...');
+                
                 if ($response_code === 200) {
-                    $body = json_decode(wp_remote_retrieve_body($response), true);
+                    $body = json_decode($response_body, true);
+                    
+                    // Проверяем ошибки в первую очередь
+                    if (isset($body['errors']) && !empty($body['errors'])) {
+                        error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ: Тариф ' . $tariff . ' вернул ошибки: ' . print_r($body['errors'], true));
+                        continue; // Пробуем следующий тариф
+                    }
+                    
                     if (isset($body['delivery_sum']) && $body['delivery_sum'] > 0) {
-                        error_log('СДЭК расчет: Альтернативный расчет успешен с тарифом ' . $tariff . ': ' . $body['delivery_sum']);
+                        error_log('✅ СДЭК АЛЬТЕРНАТИВНЫЙ: Успешный расчет с тарифом ' . $tariff . ' (' . $tariff_name . '): ' . $body['delivery_sum'] . ' руб.');
                         return array(
                             'delivery_sum' => intval($body['delivery_sum']),
                             'period_min' => isset($body['period_min']) ? $body['period_min'] : null,
                             'period_max' => isset($body['period_max']) ? $body['period_max'] : null,
+                            'total_sum' => isset($body['total_sum']) ? intval($body['total_sum']) : intval($body['delivery_sum']),
                             'api_success' => true,
-                            'alternative_tariff' => $tariff
+                            'alternative_tariff' => $tariff,
+                            'tariff_name' => $tariff_name
                         );
+                    } else {
+                        error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ: Тариф ' . $tariff . ' не вернул delivery_sum: ' . print_r($body, true));
                     }
+                } else {
+                    error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ: Тариф ' . $tariff . ' - некорректный HTTP код: ' . $response_code);
                 }
+            } else {
+                error_log('🔄 СДЭК АЛЬТЕРНАТИВНЫЙ: Ошибка HTTP для тарифа ' . $tariff . ': ' . $response->get_error_message());
             }
         }
         
