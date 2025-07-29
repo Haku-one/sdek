@@ -89,6 +89,7 @@ $cdek_yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10
         <button type="button" id="test-cdek-calculation" class="button button-primary" style="margin-left: 10px;">Тестировать расчет стоимости</button>
         <button type="button" id="test-cdek-api-detailed" class="button button-secondary" style="margin-left: 10px;">Детальное тестирование API</button>
         <button type="button" id="test-saratov-kursk" class="button button-secondary" style="margin-left: 10px;">🎯 Тест Саратов-Курск</button>
+        <button type="button" id="test-super-debug" class="button button-secondary" style="margin-left: 10px; background: #d63384; color: white;">💥 СУПЕР ДЕБАГ</button>
     </p>
     <div id="connection-result" style="margin-top: 10px;"></div>
     <div id="calculation-result" style="margin-top: 10px;"></div>
@@ -176,6 +177,27 @@ $cdek_yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10
                 }
                 
                 button.prop('disabled', false).text('🎯 Тест Саратов-Курск');
+            });
+        });
+        
+        $('#test-super-debug').on('click', function() {
+            var button = $(this);
+            var result = $('#calculation-result');
+            
+            button.prop('disabled', true).text('💥 СУПЕР ДЕБАГ...');
+            result.html('<div class="notice notice-info inline"><p>💥 Запущен СУПЕР ДЕБАГ! Проверяйте логи WordPress...</p></div>');
+            
+            $.post(ajaxurl, {
+                action: 'super_debug',
+                nonce: '<?php echo wp_create_nonce('super_debug'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    result.html('<div class="notice notice-success inline"><p>💥 ' + response.data + '</p></div>');
+                } else {
+                    result.html('<div class="notice notice-error inline"><p>💥 ' + response.data + '</p></div>');
+                }
+                
+                button.prop('disabled', false).text('💥 СУПЕР ДЕБАГ');
             });
         });
     });

@@ -95,6 +95,7 @@ class CdekDeliveryPlugin {
         add_action('wp_ajax_test_cdek_calculation', array($this, 'ajax_test_cdek_calculation'));
         add_action('wp_ajax_test_cdek_api_detailed', array($this, 'ajax_test_cdek_api_detailed'));
         add_action('wp_ajax_test_saratov_kursk', array($this, 'ajax_test_saratov_kursk'));
+        add_action('wp_ajax_super_debug', array($this, 'ajax_super_debug'));
         
 
         
@@ -269,9 +270,18 @@ class CdekDeliveryPlugin {
             return;
         }
         
+        error_log('🔥 AJAX: ================= ВЫЗОВ ОСНОВНОЙ ФУНКЦИИ РАСЧЕТА =================');
         error_log('🔥 AJAX: Создаем экземпляр CdekAPI и вызываем расчет');
+        error_log('🔥 AJAX: Параметры расчета:');
+        error_log('🔥 AJAX: - point_code: ' . $point_code);
+        error_log('🔥 AJAX: - cart_weight: ' . $cart_weight);
+        error_log('🔥 AJAX: - cart_value: ' . $cart_value);
+        error_log('🔥 AJAX: - has_real_dimensions: ' . $has_real_dimensions);
+        
         $cdek_api = new CdekAPI();
         $cost_data = $cdek_api->calculate_delivery_cost_to_point($point_code, $point_data, $cart_weight, $cart_dimensions, $cart_value, $has_real_dimensions);
+        
+        error_log('🔥 AJAX: ================= РЕЗУЛЬТАТ ОСНОВНОЙ ФУНКЦИИ =================');
         
         error_log('🔥 AJAX: Получен результат расчета: ' . print_r($cost_data, true));
         
@@ -1550,6 +1560,96 @@ class CdekDeliveryPlugin {
             ));
         }
     }
+
+    public function ajax_super_debug() {
+        if (!wp_verify_nonce($_POST['nonce'], 'super_debug')) {
+            wp_die('Security check failed');
+        }
+        
+        error_log('💥💥💥 СУПЕР ДЕБАГ: НАЧИНАЕМ ПОЛНУЮ ДИАГНОСТИКУ 💥💥💥');
+        
+        // 1. Проверяем настройки
+        $account = get_option('cdek_account');
+        $password = get_option('cdek_password');
+        $sender_city = get_option('cdek_sender_city', '354');
+        
+        error_log('💥 СУПЕР ДЕБАГ: ========== НАСТРОЙКИ ==========');
+        error_log('💥 СУПЕР ДЕБАГ: cdek_account: ' . $account);
+        error_log('💥 СУПЕР ДЕБАГ: cdek_password: ' . $password);
+        error_log('💥 СУПЕР ДЕБАГ: cdek_sender_city: ' . $sender_city);
+        
+        // 2. Создаем API объект и тестируем токен
+        $cdek_api = new CdekAPI();
+        error_log('💥 СУПЕР ДЕБАГ: ========== ТЕСТ АВТОРИЗАЦИИ ==========');
+        
+        // Очищаем кэш токена для чистого теста
+        delete_transient('cdek_auth_token');
+        
+        $token = $cdek_api->get_auth_token();
+        
+        if (!$token) {
+            wp_send_json_error('❌ СУПЕР ДЕБАГ: Не удалось получить токен авторизации! Проверьте логи.');
+            return;
+        }
+        
+        // 3. Тестируем простой API запрос
+        error_log('💥 СУПЕР ДЕБАГ: ========== ТЕСТ ПРОСТОГО ЗАПРОСА ==========');
+        
+        $simple_data = array(
+            'date' => date('Y-m-d\TH:i:sO'),
+            'type' => 1,
+            'currency' => 1, 
+            'lang' => 'rus',
+            'tariff_code' => 136,
+            'from_location' => array('code' => 354), // Саратов
+            'to_location' => array('code' => 44),   // Москва
+            'packages' => array(
+                array(
+                    'weight' => 500,
+                    'length' => 20,
+                    'width' => 15,
+                    'height' => 10
+                )
+            )
+        );
+        
+        error_log('💥 СУПЕР ДЕБАГ: Данные простого запроса: ' . json_encode($simple_data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        
+        $response = wp_remote_post('https://api.cdek.ru/v2/calculator/tariff', array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($simple_data),
+            'timeout' => 30
+        ));
+        
+        if (is_wp_error($response)) {
+            error_log('💥 СУПЕР ДЕБАГ: ❌ Ошибка простого запроса: ' . $response->get_error_message());
+            wp_send_json_error('❌ СУПЕР ДЕБАГ: Ошибка простого запроса! Проверьте логи.');
+            return;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        
+        error_log('💥 СУПЕР ДЕБАГ: Простой запрос - HTTP код: ' . $response_code);
+        error_log('💥 СУПЕР ДЕБАГ: Простой запрос - Ответ: ' . $body);
+        
+        if ($response_code === 200) {
+            $parsed = json_decode($body, true);
+            if (isset($parsed['delivery_sum'])) {
+                error_log('💥 СУПЕР ДЕБАГ: ✅ Простой запрос успешен! Стоимость: ' . $parsed['delivery_sum']);
+                wp_send_json_success('✅ СУПЕР ДЕБАГ завершен! API работает. Простой запрос Саратов-Москва: ' . $parsed['delivery_sum'] . ' руб. Проверьте логи для деталей.');
+            } else {
+                error_log('💥 СУПЕР ДЕБАГ: ❌ В ответе нет delivery_sum: ' . print_r($parsed, true));
+                wp_send_json_error('❌ СУПЕР ДЕБАГ: API отвечает, но нет delivery_sum! Проверьте логи.');
+            }
+        } else {
+            error_log('💥 СУПЕР ДЕБАГ: ❌ Неправильный HTTP код: ' . $response_code);
+            wp_send_json_error('💥 СУПЕР ДЕБАГ: Неправильный HTTP код ' . $response_code . '! Проверьте логи.');
+        }
+    }
 }
 
 // Класс для работы с СДЭК API
@@ -1584,10 +1684,12 @@ class CdekAPI {
         $token = get_transient($cache_key);
         
         if (!$token) {
-            error_log('🔑 СДЭК AUTH: Получаем новый токен авторизации');
+            error_log('🔑 СДЭК AUTH: =================== ПОЛУЧЕНИЕ ТОКЕНА ===================');
+            error_log('🔑 СДЭК AUTH: Кэшированный токен отсутствует, получаем новый');
             error_log('🔑 СДЭК AUTH: URL: ' . $this->base_url . '/oauth/token');
             error_log('🔑 СДЭК AUTH: Client ID: ' . $this->account);
             error_log('🔑 СДЭК AUTH: Client Secret: ' . substr($this->password, 0, 8) . '...');
+            error_log('🔑 СДЭК AUTH: Client Secret полный (для диагностики): ' . $this->password);
             
             $auth_data = array(
                 'grant_type' => 'client_credentials',
@@ -1596,34 +1698,78 @@ class CdekAPI {
             );
             
             error_log('🔑 СДЭК AUTH: Данные авторизации: ' . print_r($auth_data, true));
+            error_log('🔑 СДЭК AUTH: Заголовки запроса: Content-Type=application/x-www-form-urlencoded');
+            error_log('🔑 СДЭК AUTH: Параметры WordPress: timeout=30, sslverify=true');
+            
+            $auth_headers = array(
+                'Content-Type' => 'application/x-www-form-urlencoded',
+                'User-Agent' => 'WordPress/CDEK-Plugin'
+            );
+            
+            error_log('🔑 СДЭК AUTH: Отправляем POST запрос...');
             
             $response = wp_remote_post($this->base_url . '/oauth/token', array(
-                'headers' => array(
-                    'Content-Type' => 'application/x-www-form-urlencoded',
-                    'User-Agent' => 'WordPress/CDEK-Plugin'
-                ),
+                'headers' => $auth_headers,
                 'body' => $auth_data,
                 'timeout' => 30,
                 'sslverify' => true
             ));
             
+            error_log('🔑 СДЭК AUTH: Запрос отправлен, обрабатываем ответ...');
+            
             if (!is_wp_error($response)) {
                 $response_code = wp_remote_retrieve_response_code($response);
                 $body = wp_remote_retrieve_body($response);
-                error_log('🔑 СДЭК AUTH: HTTP код: ' . $response_code);
-                error_log('🔑 СДЭК AUTH: Ответ: ' . $body);
+                $headers = wp_remote_retrieve_headers($response);
                 
+                error_log('🔑 СДЭК AUTH: ================= ОТВЕТ АВТОРИЗАЦИИ =================');
+                error_log('🔑 СДЭК AUTH: HTTP код: ' . $response_code);
+                error_log('🔑 СДЭК AUTH: Заголовки ответа: ' . print_r($headers, true));
+                error_log('🔑 СДЭК AUTH: Тело ответа RAW: ' . $body);
+                error_log('🔑 СДЭК AUTH: Длина ответа: ' . strlen($body) . ' байт');
+                
+                if (empty($body)) {
+                    error_log('💥 СДЭК AUTH: ПУСТОЙ ОТВЕТ!');
+                    return false;
+                }
+                
+                $json_error_before = json_last_error();
                 $parsed_body = json_decode($body, true);
+                $json_error_after = json_last_error();
+                
+                error_log('🔑 СДЭК AUTH: JSON ошибка до декодирования: ' . $json_error_before);
+                error_log('🔑 СДЭК AUTH: JSON ошибка после декодирования: ' . $json_error_after);
+                
+                if ($json_error_after !== JSON_ERROR_NONE) {
+                    error_log('💥 СДЭК AUTH: ОШИБКА ПАРСИНГА JSON!');
+                    error_log('💥 СДЭК AUTH: Описание ошибки: ' . json_last_error_msg());
+                    return false;
+                }
+                
+                error_log('🔑 СДЭК AUTH: Декодированный ответ: ' . print_r($parsed_body, true));
+                
                 if (isset($parsed_body['access_token'])) {
                     $token = $parsed_body['access_token'];
                     $expires_in = isset($parsed_body['expires_in']) ? intval($parsed_body['expires_in']) : 3600;
                     set_transient($cache_key, $token, $expires_in - 60);
-                    error_log('🔑 СДЭК AUTH: ✅ Токен получен успешно, действует ' . $expires_in . ' сек');
+                    error_log('🔑 СДЭК AUTH: ✅ Токен получен успешно!');
+                    error_log('🔑 СДЭК AUTH: ✅ Токен: ' . $token);
+                    error_log('🔑 СДЭК AUTH: ✅ Действует: ' . $expires_in . ' сек');
                 } else {
-                    error_log('🔑 СДЭК AUTH: ❌ Не удалось получить токен. Ответ: ' . print_r($parsed_body, true));
+                    error_log('🔑 СДЭК AUTH: ❌ В ответе НЕТ access_token!');
+                    error_log('🔑 СДЭК AUTH: ❌ Доступные ключи: ' . (is_array($parsed_body) ? implode(', ', array_keys($parsed_body)) : 'не массив'));
+                    if (isset($parsed_body['error'])) {
+                        error_log('🔑 СДЭК AUTH: ❌ Ошибка в ответе: ' . $parsed_body['error']);
+                    }
+                    if (isset($parsed_body['error_description'])) {
+                        error_log('🔑 СДЭК AUTH: ❌ Описание ошибки: ' . $parsed_body['error_description']);
+                    }
                 }
             } else {
-                error_log('🔑 СДЭК AUTH: ❌ Ошибка HTTP запроса: ' . $response->get_error_message());
+                error_log('💥 СДЭК AUTH: ❌ Ошибка HTTP запроса!');
+                error_log('💥 СДЭК AUTH: ❌ Код ошибки: ' . $response->get_error_code());
+                error_log('💥 СДЭК AUTH: ❌ Сообщение: ' . $response->get_error_message());
+                error_log('💥 СДЭК AUTH: ❌ Все ошибки: ' . print_r($response->get_error_messages(), true));
             }
         } else {
             error_log('🔑 СДЭК AUTH: ✅ Используем кэшированный токен');
@@ -2166,18 +2312,32 @@ class CdekAPI {
         error_log('🚀 СДЭК API: Отправляем запрос к ' . $this->base_url . '/calculator/tariff');
         error_log('📤 СДЭК API: Данные запроса: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         error_log('🔑 СДЭК API: Токен: ' . substr($token, 0, 20) . '...');
+        error_log('🔑 СДЭК API: Полный токен для диагностики: ' . $token);
+        error_log('📍 СДЭК API: URL запроса: ' . $this->base_url . '/calculator/tariff');
+        error_log('📍 СДЭК API: Заголовки: Authorization=Bearer [токен], Content-Type=application/json');
+        error_log('📍 СДЭК API: Тело запроса RAW: ' . json_encode($data));
+        
+        $request_headers = array(
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type' => 'application/json'
+        );
+        
+        $request_body = json_encode($data);
+        
+        error_log('🔧 СДЭК API: Финальные заголовки: ' . print_r($request_headers, true));
+        error_log('🔧 СДЭК API: Финальное тело: ' . $request_body);
         
         $response = wp_remote_post($this->base_url . '/calculator/tariff', array(
-            'headers' => array(
-                'Authorization' => 'Bearer ' . $token,
-                'Content-Type' => 'application/json'
-            ),
-            'body' => json_encode($data),
+            'headers' => $request_headers,
+            'body' => $request_body,
             'timeout' => 30 // Увеличиваем таймаут
         ));
         
         if (is_wp_error($response)) {
-            error_log('СДЭК расчет: Ошибка HTTP запроса: ' . $response->get_error_message());
+            error_log('💥 СДЭК расчет: Ошибка HTTP запроса!');
+            error_log('💥 СДЭК расчет: Код ошибки: ' . $response->get_error_code());
+            error_log('💥 СДЭК расчет: Сообщение ошибки: ' . $response->get_error_message());
+            error_log('💥 СДЭК расчет: Все ошибки: ' . print_r($response->get_error_messages(), true));
             return false;
         }
         
@@ -2185,11 +2345,16 @@ class CdekAPI {
         $body = wp_remote_retrieve_body($response);
         $headers = wp_remote_retrieve_headers($response);
         
-
-        
+        error_log('📥 СДЭК API: =================== ПОЛНЫЙ ОТВЕТ ОТ API ===================');
         error_log('📥 СДЭК API: HTTP код ответа: ' . $response_code);
         error_log('📥 СДЭК API: Заголовки ответа: ' . print_r($headers, true));
-        error_log('📥 СДЭК API: Тело ответа: ' . $body);
+        error_log('📥 СДЭК API: Тело ответа RAW: ' . $body);
+        error_log('📥 СДЭК API: Длина тела ответа: ' . strlen($body) . ' байт');
+        
+        if (empty($body)) {
+            error_log('💥 СДЭК API: ПУСТОЕ ТЕЛО ОТВЕТА!');
+            return false;
+        }
         
         // Дополнительная диагностика для отладки
         if ($response_code !== 200) {
@@ -2199,10 +2364,36 @@ class CdekAPI {
             error_log('- HTTP 500: Ошибка на стороне сервера СДЭК');
         }
         
+        error_log('🔍 СДЭК API: ================= АНАЛИЗ JSON ОТВЕТА =================');
+        
+        $json_error_before = json_last_error();
         $parsed_body = json_decode($body, true);
+        $json_error_after = json_last_error();
+        
+        error_log('🔍 СДЭК API: JSON ошибка до декодирования: ' . $json_error_before);
+        error_log('🔍 СДЭК API: JSON ошибка после декодирования: ' . $json_error_after);
+        error_log('🔍 СДЭК API: Константы JSON ошибок - JSON_ERROR_NONE=' . JSON_ERROR_NONE . ', JSON_ERROR_SYNTAX=' . JSON_ERROR_SYNTAX);
+        
+        if ($json_error_after !== JSON_ERROR_NONE) {
+            error_log('💥 СДЭК API: ОШИБКА ПАРСИНГА JSON!');
+            error_log('💥 СДЭК API: Код ошибки JSON: ' . $json_error_after);
+            error_log('💥 СДЭК API: Описание ошибки JSON: ' . json_last_error_msg());
+            error_log('💥 СДЭК API: Первые 500 символов ответа: ' . substr($body, 0, 500));
+            return false;
+        }
+        
+        if ($parsed_body === null) {
+            error_log('💥 СДЭК API: Parsed body равен NULL!');
+            return false;
+        }
+        
+        error_log('🔍 СДЭК API: JSON успешно декодирован. Тип: ' . gettype($parsed_body));
+        error_log('🔍 СДЭК API: Количество элементов в ответе: ' . (is_array($parsed_body) ? count($parsed_body) : 'не массив'));
+        error_log('🔍 СДЭК API: Ключи верхнего уровня: ' . (is_array($parsed_body) ? implode(', ', array_keys($parsed_body)) : 'нет ключей'));
         
         if ($response_code === 200 && $parsed_body) {
-            error_log('✅ СДЭК API: Успешный HTTP ответ, разбираем JSON: ' . print_r($parsed_body, true));
+            error_log('✅ СДЭК API: Успешный HTTP ответ 200, JSON декодирован');
+            error_log('✅ СДЭК API: Полный декодированный ответ: ' . print_r($parsed_body, true));
             
             // Проверяем наличие ошибок в ответе в первую очередь
             if (isset($parsed_body['errors']) && !empty($parsed_body['errors'])) {
