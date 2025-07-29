@@ -57,6 +57,12 @@ class WC_Cdek_Store_API_Extension {
      */
     public static function extend_store() {
         try {
+            // Проверяем что ExtendSchema доступен
+            if (!self::$extend) {
+                error_log('CDEK Store API: ExtendSchema не инициализирован');
+                return;
+            }
+
             if (is_callable([self::$extend, 'register_endpoint_data'])) {
                 self::$extend->register_endpoint_data(
                     array(
@@ -68,6 +74,8 @@ class WC_Cdek_Store_API_Extension {
                     )
                 );
                 error_log('CDEK Store API: register_endpoint_data зарегистрирован');
+            } else {
+                error_log('CDEK Store API: register_endpoint_data недоступен');
             }
 
             if (is_callable([self::$extend, 'register_update_callback'])) {
@@ -78,6 +86,8 @@ class WC_Cdek_Store_API_Extension {
                     )
                 );
                 error_log('CDEK Store API: register_update_callback зарегистрирован');
+            } else {
+                error_log('CDEK Store API: register_update_callback недоступен');
             }
 
             // Альтернативный метод регистрации для совместимости
@@ -88,6 +98,8 @@ class WC_Cdek_Store_API_Extension {
             
         } catch (Exception $e) {
             error_log('CDEK Store API: Ошибка регистрации расширения: ' . $e->getMessage());
+        } catch (Error $e) {
+            error_log('CDEK Store API: Фатальная ошибка регистрации расширения: ' . $e->getMessage());
         }
     }
 
@@ -143,7 +155,7 @@ class WC_Cdek_Store_API_Extension {
             error_log('CDEK Store API: update_callback вызван с данными: ' . print_r($data, true));
             
             // Сохраняем данные в сессию WooCommerce
-            if (WC()->session) {
+            if (function_exists('WC') && WC() && WC()->session) {
                 if (isset($data['point_code']) && !empty($data['point_code'])) {
                     WC()->session->set('cdek_selected_point_code', $data['point_code']);
                     error_log('CDEK Store API: Сохранен point_code в сессию: ' . $data['point_code']);
@@ -187,7 +199,7 @@ class WC_Cdek_Store_API_Extension {
             error_log('CDEK Store API: Сохраняем мета для заказа ID: ' . $order_id);
 
             // Получаем данные из сессии
-            if (WC()->session) {
+            if (function_exists('WC') && WC() && WC()->session) {
                 $point_code = WC()->session->get('cdek_selected_point_code');
                 $point_data = WC()->session->get('cdek_selected_point_data');
                 $delivery_cost = WC()->session->get('cdek_delivery_cost');
@@ -255,5 +267,4 @@ class WC_Cdek_Store_API_Extension {
     }
 }
 
-// Инициализируем расширение Store API
-WC_Cdek_Store_API_Extension::init();
+// Инициализация расширения Store API выполняется в основном плагине

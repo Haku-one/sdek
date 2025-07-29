@@ -810,7 +810,14 @@ class CdekDeliveryPlugin {
             // Подключаем класс расширения Store API
             if (file_exists(plugin_dir_path(__FILE__) . 'includes/class-cdek-store-api-extension.php')) {
                 require_once plugin_dir_path(__FILE__) . 'includes/class-cdek-store-api-extension.php';
-                error_log('CDEK: Store API extension загружен');
+                
+                // Проверяем что класс загружен успешно
+                if (class_exists('WC_Cdek_Store_API_Extension')) {
+                    WC_Cdek_Store_API_Extension::init();
+                    error_log('CDEK: Store API extension загружен и инициализирован');
+                } else {
+                    error_log('CDEK: Класс WC_Cdek_Store_API_Extension не найден после подключения файла');
+                }
             } else {
                 error_log('CDEK: Файл Store API extension не найден');
             }
@@ -1907,17 +1914,8 @@ class CdekAPI {
         try {
             error_log('CDEK: Начинаем регистрацию REST полей');
             
-            // Простая регистрация для совместимости с Store API
-            if (class_exists('Automattic\WooCommerce\StoreApi\StoreApi')) {
-                // Регистрируем обработчики для Store API только если он доступен
-                add_action('woocommerce_store_api_checkout_update_order_meta', array($this, 'save_cdek_data_from_store_api'));
-                add_filter('woocommerce_store_api_checkout_order_received_object', array($this, 'add_cdek_data_to_order_response'), 10, 3);
-                error_log('CDEK: Store API обработчики зарегистрированы');
-            } else {
-                error_log('CDEK: Store API недоступен, пропускаем регистрацию');
-            }
-            
-            // Дополнительно регистрируем обработчики для REST API
+            // Store API обработчики теперь регистрируются в WC_Cdek_Store_API_Extension
+            // Здесь только регистрируем обработчики для REST API
             add_action('woocommerce_rest_checkout_process_payment', array($this, 'save_cdek_data_from_rest'), 10, 2);
             
             error_log('CDEK: REST поля успешно зарегистрированы');
