@@ -1293,8 +1293,18 @@ jQuery(document).ready(function($) {
         });
     }
     
+
+    
     function performCdekSearch() {
         if (typeof cdek_ajax === 'undefined') return;
+        
+        // Формируем адрес для поиска - используем конкретный город, если он известен
+        var searchAddress = 'Россия';
+        if (window.currentSearchCity) {
+            searchAddress = window.currentSearchCity;
+        }
+        
+        console.log('🔍 Отправляем запрос к API СДЭК для адреса:', searchAddress);
         
         $.ajax({
             url: cdek_ajax.ajax_url,
@@ -1303,14 +1313,54 @@ jQuery(document).ready(function($) {
             timeout: 30000,
             data: {
                 action: 'get_cdek_points',
-                address: 'Россия',
+                address: searchAddress,
                 nonce: cdek_ajax.nonce
             },
             success: function(response) {
                 hidePvzLoader();
                 if (response.success && response.data) {
+                    console.log('✅ Получено ПВЗ от API:', response.data.length);
+                    
+                    // Отладочная информация - показываем первые несколько пунктов
+                    if (response.data.length > 0) {
+                        console.log('🔍 Первые 3 пункта от API:');
+                        for (var i = 0; i < Math.min(3, response.data.length); i++) {
+                            var point = response.data[i];
+                            console.log('Пункт ' + (i+1) + ':', {
+                                code: point.code,
+                                name: point.name,
+                                type: point.type,
+                                city: point.location ? point.location.city : 'не указан',
+                                address: point.location ? point.location.address : 'не указан',
+                                address_comment: point.address_comment
+                            });
+                        }
+                        
+                        // Ищем конкретно пункт в Тюмени по адресу Зелинского
+                        var tyumenPoints = response.data.filter(function(point) {
+                            var hasZelinsky = false;
+                            if (point.location && point.location.address) {
+                                hasZelinsky = point.location.address.toLowerCase().includes('зелинск');
+                            }
+                            if (!hasZelinsky && point.address_comment) {
+                                hasZelinsky = point.address_comment.toLowerCase().includes('зелинск');
+                            }
+                            if (!hasZelinsky && point.name) {
+                                hasZelinsky = point.name.toLowerCase().includes('зелинск');
+                            }
+                            return hasZelinsky;
+                        });
+                        
+                        if (tyumenPoints.length > 0) {
+                            console.log('🎯 Найдены пункты с адресом Зелинского:', tyumenPoints);
+                        } else {
+                            console.log('❌ Пункт по адресу Зелинского НЕ найден в ответе API');
+                        }
+                    }
+                    
                     displayCdekPoints(response.data);
                 } else {
+                    console.error('❌ Ошибка получения ПВЗ:', response);
                     showPvzError('Не удалось загрузить пункты выдачи');
                 }
             },
@@ -1339,19 +1389,38 @@ jQuery(document).ready(function($) {
         }
         
         var filteredPoints = points.filter(function(point) {
-            if (point.type !== 'PVZ' && point.type) return false;
+            // Убираем фильтрацию по типу - показываем все пункты выдачи
+            // if (point.type !== 'PVZ' && point.type) return false;
             
             if (window.currentSearchCity) {
                 var pointCity = '';
                 
+                // Пытаемся получить город из разных полей
                 if (point.location && point.location.city) {
                     pointCity = point.location.city.trim();
                 }
                 
+                // Если не нашли в location.city, ищем в address
+                if (!pointCity && point.location && point.location.address) {
+                    var addressParts = point.location.address.split(',');
+                    if (addressParts.length > 0) {
+                        pointCity = addressParts[0].trim();
+                    }
+                }
+                
+                // Если не нашли в address, ищем в name
                 if (!pointCity && point.name && point.name.includes(',')) {
                     var nameParts = point.name.split(',');
                     if (nameParts.length >= 2) {
                         pointCity = nameParts[1].trim();
+                    }
+                }
+                
+                // Если не нашли в name, ищем в полном адресе
+                if (!pointCity && point.address_comment) {
+                    var commentParts = point.address_comment.split(',');
+                    if (commentParts.length > 0) {
+                        pointCity = commentParts[0].trim();
                     }
                 }
                 
@@ -1362,11 +1431,37 @@ jQuery(document).ready(function($) {
                 var searchCityLower = window.currentSearchCity.toLowerCase().trim();
                 var pointCityLower = pointCity.toLowerCase().trim();
                 
-                if (pointCityLower !== searchCityLower) return false;
+                // Более гибкое сравнение - проверяем вхождение
+                if (pointCityLower && searchCityLower) {
+                    if (pointCityLower !== searchCityLower && 
+                        !pointCityLower.includes(searchCityLower) && 
+                        !searchCityLower.includes(pointCityLower)) {
+                        return false;
+                    }
+                }
             }
             
             return true;
         });
+        
+        console.log('🔍 Фильтрация ПВЗ:');
+        console.log('- Всего получено от API:', points.length);
+        console.log('- После фильтрации:', filteredPoints.length);
+        console.log('- Поисковый город:', window.currentSearchCity);
+        
+        // Показываем примеры отфильтрованных пунктов
+        if (filteredPoints.length > 0) {
+            console.log('- Первые 3 отфильтрованных пункта:');
+            for (var i = 0; i < Math.min(3, filteredPoints.length); i++) {
+                var point = filteredPoints[i];
+                console.log('  Пункт ' + (i+1) + ':', {
+                    code: point.code,
+                    name: point.name,
+                    city: point.location ? point.location.city : 'не указан',
+                    address: point.location ? point.location.address : 'не указан'
+                });
+            }
+        }
         
         if (window.currentSearchCoordinates && filteredPoints.length > 0) {
             filteredPoints.sort(function(a, b) {
@@ -1386,7 +1481,7 @@ jQuery(document).ready(function($) {
             });
         }
         
-        var maxPoints = 380; // Показываем все доступные ПВЗ
+        var maxPoints = 1000; // Увеличиваем лимит для отображения большего количества ПВЗ
         var pointsToShow = filteredPoints.slice(0, maxPoints);
         
         var pointsInfo = '';
@@ -1958,6 +2053,8 @@ jQuery(document).ready(function($) {
             debouncer.debounce('address-change', () => searchCdekPoints(city), 500, 4);
         }
     });
+    
+
     
     var observer = new MutationObserver(function(mutations) {
         var needsUpdate = false;
