@@ -104,7 +104,7 @@ class DOMBatcher {
             try {
                 op();
             } catch (error) {
-                console.error('DOM operation error:', error);
+                
             }
         });
         
@@ -167,7 +167,7 @@ class PriceFormatter {
                         const correctedNumber = pattern.prefixLen === Math.floor(mainNumber.length / 2) ? prefix : suffix;
                         const correctedText = priceText.replace(mainNumber, correctedNumber);
                         
-                        console.log(`🔧 Исправлена дублированная цена: ${priceText} -> ${correctedText}`);
+                        
                         return correctedText;
                     }
                 }
@@ -234,10 +234,10 @@ class SmartAddressSearch {
                             lat: position.coords.latitude,
                             lng: position.coords.longitude
                         };
-                        console.log('✅ Геолокация получена:', this.userLocation);
+                        
                     },
                     (error) => {
-                        console.log('Геолокация недоступна, используем fallback');
+                        
                         // НЕ используем внешние API - избегаем CORS ошибок
                         this.setDefaultLocation();
                     },
@@ -247,7 +247,7 @@ class SmartAddressSearch {
                 this.setDefaultLocation();
             }
         } catch (error) {
-            console.log('Геолокация недоступна');
+            
             this.setDefaultLocation();
         }
     }
@@ -435,7 +435,7 @@ jQuery(document).ready(function($) {
                     const fixedText = PriceFormatter.fixDuplicatedPrice(currentText);
                     
                     if (currentText !== fixedText) {
-                        console.log(`🔧 Исправляем цену: ${currentText} -> ${fixedText}`);
+                        
                         $element.text(fixedText);
                     }
                 }
@@ -492,7 +492,7 @@ jQuery(document).ready(function($) {
         var totalItems = 0;
         var packagesCount = 1;
         
-        console.log('Получение данных корзины для расчета...');
+        
         
         var processedItems = new Set();
         $('.wc-block-components-order-summary-item').each(function() {
@@ -509,7 +509,7 @@ jQuery(document).ready(function($) {
             var quantityElement = $item.find('.wc-block-components-order-summary-item__quantity span[aria-hidden="true"]');
             var quantity = parseInt(quantityElement.text()) || 1;
             
-            console.log('Обработка товара из WC блока, количество:', quantity);
+            
             
             var dimensionsElement = $item.find('.wc-block-components-product-details__value').filter(function() {
                 var siblingLabel = $(this).siblings('.wc-block-components-product-details__name');
@@ -519,7 +519,7 @@ jQuery(document).ready(function($) {
             
             if (dimensionsElement.length > 0) {
                 var dimensionsText = dimensionsElement.text().trim();
-                console.log('Найдены габариты в блоке товара:', dimensionsText);
+                
                 
                 var dimensionsMatch = dimensionsText.match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/);
                 
@@ -528,7 +528,7 @@ jQuery(document).ready(function($) {
                     var width = parseFloat(dimensionsMatch[2]);
                     var height = parseFloat(dimensionsMatch[3]);
                     
-                    console.log('✅ Найдены габариты из WC блока товара:', {length: length, width: width, height: height, quantity: quantity});
+                    
                     
                     var itemVolume = length * width * height * quantity;
                     totalVolume += itemVolume;
@@ -549,7 +549,7 @@ jQuery(document).ready(function($) {
             
             if (weightElement.length > 0) {
                 var weightText = weightElement.text().trim();
-                console.log('Найден вес в блоке товара:', weightText);
+                
                 
                 var weightMatch = weightText.match(/(\d+(?:\.\d+)?)/);
                 
@@ -561,7 +561,7 @@ jQuery(document).ready(function($) {
                     }
                     
                     cartWeight += weight * quantity;
-                    console.log('✅ Найден вес из WC блока товара:', weight, 'г, количество:', quantity);
+                    
                 }
             }
             
@@ -569,11 +569,11 @@ jQuery(document).ready(function($) {
             
             if (totalPriceElement.length > 0) {
                 var totalPriceText = totalPriceElement.text().trim();
-                console.log('Найдена итоговая цена товара:', totalPriceText);
+                
                 
                 var totalPrice = PriceFormatter.extractCleanPrice(totalPriceText);
                 cartValue += totalPrice;
-                console.log('✅ Используем итоговую цену товара:', totalPrice, 'руб. (с учетом количества', quantity + ')');
+                
             }
         });
         
@@ -582,16 +582,16 @@ jQuery(document).ready(function($) {
         
         if (totalOrderElement.length > 0) {
             var totalText = totalOrderElement.first().text().trim();
-            console.log('Найдена итоговая сумма заказа:', totalText);
+            
             
             orderTotalFromFooter = PriceFormatter.extractCleanPrice(totalText);
-            console.log('Извлечена итоговая сумма:', orderTotalFromFooter);
+            
         }
         
         // ========== ИСПРАВЛЕННЫЙ РАСЧЕТ РАЗМЕРОВ УПАКОВКИ ==========
         var dimensions;
         if (hasValidDimensions && totalVolume > 0) {
-            console.log('Расчет размеров упаковки на основе товаров:', {
+            console.log('Calculating package dimensions:', {
                 totalVolume: totalVolume,
                 maxLength: maxLength,
                 maxWidth: maxWidth,
@@ -622,7 +622,7 @@ jQuery(document).ready(function($) {
             // ИСПРАВЛЕННАЯ ПРОВЕРКА ОБЪЕМА УПАКОВКИ
             var volume = (dimensions.height + dimensions.width) * 2 + dimensions.length;
             if (volume > 300) {
-                console.log('⚠️ Объем упаковки превышает лимит СДЭК:', volume, 'см > 300 см. Разделяем на несколько коробок.');
+                
                 
                 // ПРАВИЛЬНЫЙ расчет количества коробок
                 packagesCount = Math.ceil(volume / 280); // 280 для безопасного запаса
@@ -651,18 +651,18 @@ jQuery(document).ready(function($) {
                 
                 var itemsPerPackage = Math.ceil(totalItems / packagesCount);
                 
-                console.log('✅ Груз разделен на', packagesCount, 'коробок. Размер одной коробки:', dimensions);
-                console.log('✅ Объем одной коробки:', newVolume, 'см (лимит: 300 см). Товаров в коробке:', itemsPerPackage);
+                
+                
                 
                 // Корректируем вес на одну коробку
                 cartWeight = cartWeight / packagesCount;
             } else {
-                console.log('✅ Объем упаковки в пределах лимита:', volume, 'см <= 300 см');
+                
             }
             
-            console.log('Рассчитанные размеры упаковки:', dimensions);
+            
         } else {
-            console.log('Используем размеры по умолчанию (нет реальных габаритов)');
+            
             dimensions = {
                 length: 30,
                 width: 20,
@@ -675,7 +675,7 @@ jQuery(document).ready(function($) {
         }
         
         if (orderTotalFromFooter > 0) {
-            console.log('💰 Используем итоговую сумму заказа:', orderTotalFromFooter, 'руб. (вместо суммы по товарам:', cartValue, 'руб.)');
+            
             cartValue = orderTotalFromFooter;
         } else if (cartValue === 0) {
             var subtotalElement = $('.wc-block-components-totals-item').filter(function() {
@@ -689,7 +689,7 @@ jQuery(document).ready(function($) {
             }
         }
         
-        console.log('Данные корзины для расчета:', {
+        console.log('Cart calculation result:', {
             weight: cartWeight,
             value: cartValue,
             dimensions: dimensions,
@@ -712,19 +712,19 @@ jQuery(document).ready(function($) {
         var cartData = getCartDataForCalculation();
         
         if (typeof cdek_ajax === 'undefined' || !cdek_ajax.ajax_url) {
-            console.error('CDEK AJAX не инициализирован');
+            
             if (callback) callback(calculateFallbackCost(point, cartData));
             return;
         }
         
         if (!point || !point.code) {
-            console.error('Не указан пункт выдачи или его код');
+            
             if (callback) callback(calculateFallbackCost(point, cartData));
             return;
         }
         
-        console.log('💰 Запрос расчета стоимости доставки для пункта:', point.code);
-        console.log('📦 Данные корзины:', cartData);
+        
+        
         
         $.ajax({
             url: cdek_ajax.ajax_url,
@@ -743,7 +743,7 @@ jQuery(document).ready(function($) {
                 nonce: cdek_ajax.nonce || ''
             },
             success: function(response) {
-                console.log('✅ Ответ API расчета стоимости:', response);
+                
                 
                 if (response && response.success && response.data && response.data.delivery_sum) {
                     var deliveryCost = parseInt(response.data.delivery_sum);
@@ -751,39 +751,39 @@ jQuery(document).ready(function($) {
                     if (cartData.packagesCount > 1) {
                         var costPerPackage = deliveryCost;
                         deliveryCost = deliveryCost * cartData.packagesCount;
-                        console.log('📦 Стоимость пересчитана для', cartData.packagesCount, 'коробок:', costPerPackage, '×', cartData.packagesCount, '=', deliveryCost, 'руб.');
+                        
                     }
                     
                     if (response.data.fallback) {
-                        console.warn('⚠️ Используется резервный расчет:', deliveryCost, 'руб.');
-                        console.log('Причина:', response.data.message);
+                        
+                        
                     } else if (response.data.api_success) {
-                        console.log('✅ Успешно получена стоимость из настоящего API СДЭК:', deliveryCost, 'руб.');
+                        
                         if (response.data.alternative_tariff) {
-                            console.log('Использован альтернативный тариф:', response.data.alternative_tariff);
+                            
                         }
                     } else {
-                        console.log('💰 Получена стоимость доставки:', deliveryCost, 'руб.');
+                        
                     }
                     
                     if (callback) callback(deliveryCost);
                 } else if (!response.success) {
-                    console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    
                     
                     // Используем fallback вместо показа ошибки пользователю
                     var fallbackCost = calculateFallbackCost(point, cartData);
-                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    
                     if (callback) callback(fallbackCost);
                 } else {
-                    console.error('❌ API СДЭК вернул некорректный ответ');
+                    
                     
                     var fallbackCost = calculateFallbackCost(point, cartData);
-                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    
                     if (callback) callback(fallbackCost);
                 }
             },
             error: function(xhr, status, error) {
-                console.error('❌ Критическая ошибка запроса к API СДЭК:', {
+                console.log('AJAX error:', {
                     status: status,
                     error: error,
                     responseText: xhr.responseText,
@@ -792,7 +792,7 @@ jQuery(document).ready(function($) {
                 
                 // Используем fallback вместо показа ошибки
                 var fallbackCost = calculateFallbackCost(point, cartData);
-                console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                
                 if (callback) callback(fallbackCost);
             }
         });
@@ -828,7 +828,7 @@ jQuery(document).ready(function($) {
         // Умножаем на количество коробок
         if (cartData.packagesCount > 1) {
             baseCost = baseCost * cartData.packagesCount;
-            console.log('📦 Fallback стоимость пересчитана для', cartData.packagesCount, 'коробок:', baseCost, 'руб.');
+            
         }
         
         return baseCost;
@@ -1213,7 +1213,7 @@ jQuery(document).ready(function($) {
                 
                 localStorage.setItem('cdek_recent_searches', JSON.stringify(recentSearches));
             } catch (error) {
-                console.log('Не удалось сохранить недавний поиск');
+                
             }
         }
         
@@ -1233,22 +1233,22 @@ jQuery(document).ready(function($) {
     
     function initYandexMap() {
         // ИСПРАВЛЕНИЕ: Добавляем дополнительные проверки и очистку
-        console.log('🗺️ Попытка инициализации карты. Текущее состояние cdekMap:', !!cdekMap);
+        
         
         if (cdekMap) {
-            console.log('🗺️ Карта уже инициализирована, пропускаем');
+            
             return;
         }
         
         if (typeof ymaps === 'undefined') {
-            console.log('🗺️ Яндекс.Карты не загружены, повторная попытка через 1 сек');
+            
             setTimeout(initYandexMap, 1000);
             return;
         }
         
         var mapContainer = document.getElementById('cdek-map');
         if (!mapContainer) {
-            console.log('🗺️ Контейнер карты не найден, повторная попытка через 0.5 сек');
+            
             setTimeout(initYandexMap, 500);
             return;
         }
@@ -1260,14 +1260,14 @@ jQuery(document).ready(function($) {
         var parentContainer = document.getElementById('cdek-map-container');
         if (parentContainer) {
             parentContainer.style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
-            console.log('🗺️ Принудительно показываем родительский контейнер');
+            
         }
         
         // Проверяем блок wp-block-cdek-checkout-map-block
         var wpBlock = document.querySelector('.wp-block-cdek-checkout-map-block');
         if (wpBlock) {
             wpBlock.style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
-            console.log('🗺️ Принудительно показываем wp-block-cdek-checkout-map-block');
+            
         }
         
         // Ждем, пока контейнер получит размеры
@@ -1275,7 +1275,7 @@ jQuery(document).ready(function($) {
         var checkSize = function() {
             attempts++;
             if (mapContainer.offsetWidth > 0 && mapContainer.offsetHeight > 0) {
-                console.log('🗺️ Контейнер готов, размеры:', mapContainer.offsetWidth, 'x', mapContainer.offsetHeight);
+                
                 try {
                     cdekMap = new ymaps.Map(mapContainer, {
                         center: [55.76, 37.64], // Центр Москвы по умолчанию
@@ -1283,33 +1283,32 @@ jQuery(document).ready(function($) {
                         controls: ['zoomControl', 'fullscreenControl', 'geolocationControl']
                     });
                     
-                    console.log('✅ Яндекс.Карта успешно инициализирована');
+                    
                     
                     // Добавляем обработчик готовности карты
                     cdekMap.events.add('ready', function() {
-                        console.log('✅ Карта готова к использованию');
+                        
                         
                         // ИСПРАВЛЕНИЕ: Принудительно перерисовываем карту
                         setTimeout(function() {
                             if (cdekMap && cdekMap.container) {
                                 cdekMap.container.fitToViewport();
-                                console.log('🔄 Карта перерисована');
+                                
                             }
                         }, 100);
                     });
                     
                 } catch (error) {
-                    console.error('❌ Ошибка инициализации карты:', error);
+                    
                     cdekMap = null;
                     // Попробуем еще раз через секунду
                     setTimeout(initYandexMap, 1000);
                 }
             } else if (attempts < 10) {
-                console.log('🗺️ Ожидаем размеры контейнера, попытка', attempts);
+                
                 setTimeout(checkSize, 100);
             } else {
-                console.error('❌ Не удалось получить размеры контейнера карты после 10 попыток');
-                console.log('🔍 Отладка контейнера:', {
+                console.log('Map container check failed:', {
                     container: !!mapContainer,
                     width: mapContainer ? mapContainer.offsetWidth : 'N/A',
                     height: mapContainer ? mapContainer.offsetHeight : 'N/A',
@@ -1353,7 +1352,7 @@ jQuery(document).ready(function($) {
         
         // Проверяем, есть ли координаты для этого города
         if (cityCoordinates[searchCity]) {
-            console.log('✅ Найдены координаты для города', address, ':', cityCoordinates[searchCity]);
+            
             callback(cityCoordinates[searchCity]);
             return;
         }
@@ -1364,18 +1363,18 @@ jQuery(document).ready(function($) {
                 if (res.geoObjects.getLength() > 0) {
                     var firstGeoObject = res.geoObjects.get(0);
                     var coords = firstGeoObject.geometry.getCoordinates();
-                    console.log('✅ Координаты получены от Яндекс.Карт для', address, ':', coords);
+                    
                     callback(coords);
                 } else {
-                    console.log('⚠️ Координаты не найдены для', address);
+                    
                     callback(null);
                 }
             }).catch(function(error) {
-                console.log('❌ Ошибка геокодирования для', address, ':', error);
+                
                 callback(null);
             });
         } else {
-            console.log('❌ Яндекс.Карты не доступны');
+            
             callback(null);
         }
     }
@@ -1396,7 +1395,7 @@ jQuery(document).ready(function($) {
         
         // Проверяем, не ищем ли мы тот же город повторно
         if (window.currentSearchCity === parsedAddress.city && cdekPoints && cdekPoints.length > 0) {
-            console.log('🔄 Используем кэшированные ПВЗ для города:', parsedAddress.city);
+            
             hidePvzLoader();
             displayCdekPoints(cdekPoints);
             return;
@@ -1411,7 +1410,7 @@ jQuery(document).ready(function($) {
         window.currentSearchStreet = parsedAddress.street;
         window.searchAttempts = 0; // счетчик попыток поиска
         
-        console.log('🔍 Поиск ПВЗ для города:', parsedAddress.city);
+        
         
         memoizedGeocodeAddress(address, function(coords) {
             window.currentSearchCoordinates = coords;
@@ -1454,7 +1453,7 @@ jQuery(document).ready(function($) {
         
         var currentStrategy = searchStrategies[Math.min(window.searchAttempts - 1, searchStrategies.length - 1)];
         
-        console.log(`🔍 Стратегия ${window.searchAttempts}: ${currentStrategy.description} для города "${window.currentSearchCity}"`);
+        
         
         $.ajax({
             url: cdek_ajax.ajax_url,
@@ -1471,7 +1470,7 @@ jQuery(document).ready(function($) {
                 hidePvzLoader();
                 
                 if (response.success && response.data && response.data.length > 0) {
-                    console.log(`✅ Стратегия ${window.searchAttempts} успешна: найдено ${response.data.length} ПВЗ`);
+                    
                     
                     // Если это широкий поиск, фильтруем результаты по городу на клиенте
                     var filteredPoints = response.data;
@@ -1484,7 +1483,7 @@ jQuery(document).ready(function($) {
                             }
                             return false;
                         });
-                        console.log(`🔍 После клиентской фильтрации осталось: ${filteredPoints.length} ПВЗ`);
+                        
                     }
                     
                     if (filteredPoints.length > 0) {
@@ -1495,10 +1494,10 @@ jQuery(document).ready(function($) {
                 
                 // Если текущая стратегия не дала результатов, пробуем следующую
                 if (window.searchAttempts < searchStrategies.length) {
-                    console.log(`⚠️ Стратегия ${window.searchAttempts} не дала результатов, пробуем следующую...`);
+                    
                     setTimeout(performCdekSearchWithFallback, 1000);
                 } else {
-                    console.error('❌ Все стратегии поиска исчерпаны');
+                    
                     showPvzErrorWithSuggestions('Не удалось найти пункты выдачи');
                 }
             },
@@ -1506,10 +1505,10 @@ jQuery(document).ready(function($) {
                 hidePvzLoader();
                 
                 if (window.searchAttempts < searchStrategies.length) {
-                    console.log(`❌ Ошибка в стратегии ${window.searchAttempts}, пробуем следующую...`);
+                    
                     setTimeout(performCdekSearchWithFallback, 1000);
                 } else {
-                    console.error('Ошибка получения пунктов СДЭК:', error);
+                    
                     showPvzErrorWithSuggestions('Ошибка загрузки пунктов выдачи');
                 }
             }
@@ -1551,9 +1550,9 @@ jQuery(document).ready(function($) {
         
         var filteredPoints = points; // НЕ ФИЛЬТРУЕМ - API уже возвращает отфильтрованные данные
         
-        console.log('🔍 Результат API фильтрации (версия 2.6.2):');
-        console.log('- Всего получено от API для города "' + window.currentSearchCity + '":', points.length);
-        console.log('- Отображаем все полученные пункты (БЕЗ клиентской фильтрации):', filteredPoints.length);
+        
+        
+        
         
         // Сортируем по расстоянию если есть координаты
         if (window.currentSearchCoordinates && filteredPoints.length > 0) {
@@ -1660,7 +1659,7 @@ jQuery(document).ready(function($) {
         // Запоминаем выбранный ПВЗ чтобы избежать повторных поисков
         window.lastSelectedPointCode = point.code;
         
-        console.log('✅ Выбран ПВЗ:', point.name, '(код:', point.code + ')');
+        
         
         // Показываем информацию о выбранном пункте
         $('#cdek-point-info').html(formatPointInfo(point));
@@ -1736,7 +1735,7 @@ jQuery(document).ready(function($) {
         // Обновляем информацию о заказе и рассчитываем стоимость
         updateOrderSummary(point);
         
-        console.log('✅ ПВЗ выбран и цена рассчитывается...');
+        
     };
     
     function clearSelectedPoint() {
@@ -1751,7 +1750,7 @@ jQuery(document).ready(function($) {
         
         resetCdekShippingToDefault();
         
-        console.log('🗑️ Очищен выбор ПВЗ');
+        
     }
     
     function formatPointInfo(point) {
@@ -2021,8 +2020,8 @@ jQuery(document).ready(function($) {
                     
                     if (Math.abs(currentValue - newTotal) > 1) { // Разница больше 1 рубля
                         totalValueElement.text(formattedTotal);
-                        console.log('💰 Обновлена итоговая сумма:', formattedTotal, '(было:', currentText + ')');
-                        console.log('💡 Расчет: подытог', subtotal, '+ доставка', deliveryCost, '+ налог', tax, '=', newTotal);
+                        
+                        
                     }
                 }
             }
@@ -2037,9 +2036,9 @@ jQuery(document).ready(function($) {
             });
             
             if (totalBlocks.length > 1) {
-                console.log('🔍 Найдено дублированных элементов итоговой суммы:', totalBlocks.length);
+                
                 totalBlocks.slice(1).remove();
-                console.log('✅ Дублированные элементы удалены');
+                
             }
         });
     }
@@ -2124,10 +2123,10 @@ jQuery(document).ready(function($) {
             var mapBlock = $('.wp-block-cdek-checkout-map-block');
             var insertTarget = null;
             
-            console.log('🗺️ Поиск блока карты. Найдено wp-block-cdek-checkout-map-block:', mapBlock.length);
+            
             
             if (mapBlock.length > 0) {
-                console.log('✅ Найден блок wp-block-cdek-checkout-map-block, вставляем карту');
+                
                 insertTarget = mapBlock;
                 insertTarget.html(mapHtml);
                 
@@ -2135,9 +2134,9 @@ jQuery(document).ready(function($) {
                 mapBlock.each(function() {
                     this.style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
                 });
-                console.log('🔧 Принудительно показан блок wp-block-cdek-checkout-map-block');
+                
             } else {
-                console.log('🔍 Блок wp-block-cdek-checkout-map-block не найден, ищем альтернативные места');
+                
                 
                 // Поиск альтернативных мест для вставки карты
                 var addressForm = $('.wc-block-components-address-form');
@@ -2145,7 +2144,7 @@ jQuery(document).ready(function($) {
                 var shippingControl = $('.wc-block-components-shipping-rates-control');
                 var checkoutMain = $('.wp-block-woocommerce-checkout');
                 
-                console.log('🔍 Альтернативные места:', {
+                console.log('Searching for insertion targets:', {
                     addressForm: addressForm.length,
                     shippingBlock: shippingBlock.length, 
                     shippingControl: shippingControl.length,
@@ -2153,23 +2152,23 @@ jQuery(document).ready(function($) {
                 });
                 
                 if (shippingControl.length > 0) {
-                    console.log('✅ Вставляем карту после shipping-rates-control');
+                    
                     insertTarget = shippingControl.first();
                     insertTarget.after(mapHtml);
                 } else if (addressForm.length > 0) {
-                    console.log('✅ Вставляем карту после address-form');
+                    
                     insertTarget = addressForm.first();
                     insertTarget.after(mapHtml);
                 } else if (shippingBlock.length > 0) {
-                    console.log('✅ Вставляем карту после shipping-address-block');
+                    
                     insertTarget = shippingBlock.first();
                     insertTarget.after(mapHtml);
                 } else if (checkoutMain.length > 0) {
-                    console.log('✅ Вставляем карту в checkout main');
+                    
                     insertTarget = checkoutMain.first();
                     insertTarget.append(mapHtml);
                 } else {
-                    console.error('❌ Не найдено подходящее место для вставки карты');
+                    
                     // Принудительная вставка в body как последний шанс
                     $('body').append(mapHtml);
                 }
@@ -2180,7 +2179,7 @@ jQuery(document).ready(function($) {
         
         // ИСПРАВЛЕНИЕ: Даем больше времени на отображение контейнера
         setTimeout(() => {
-            console.log('🗺️ Запуск инициализации карты через 500мс');
+            
             initYandexMap();
             
             // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Убеждаемся что все контейнеры видимы
@@ -2190,7 +2189,7 @@ jQuery(document).ready(function($) {
                 const mapElement = document.getElementById('cdek-map');
                 
                 if (wpBlock && mapContainer && mapElement) {
-                    console.log('🔧 Дополнительная проверка видимости карты');
+                    
                     
                     // Принудительно показываем все уровни
                     wpBlock.style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
@@ -2198,7 +2197,7 @@ jQuery(document).ready(function($) {
                     mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
                     
                     // Проверяем размеры
-                    console.log('📏 Размеры элементов:', {
+                    console.log('Container sizes:', {
                         wpBlock: { w: wpBlock.offsetWidth, h: wpBlock.offsetHeight },
                         mapContainer: { w: mapContainer.offsetWidth, h: mapContainer.offsetHeight },
                         mapElement: { w: mapElement.offsetWidth, h: mapElement.offsetHeight }
@@ -2206,7 +2205,7 @@ jQuery(document).ready(function($) {
                     
                     // Если карта есть, но элемент имеет нулевые размеры - перерисовываем
                     if (cdekMap && mapElement.offsetWidth === 0) {
-                        console.log('🔄 Карта имеет нулевые размеры, принудительно перерисовываем');
+                        
                         setTimeout(() => {
                             if (cdekMap && cdekMap.container) {
                                 cdekMap.container.fitToViewport();
@@ -2234,7 +2233,7 @@ jQuery(document).ready(function($) {
             fixExistingDuplicatedPrices();
         }, 2000);
         
-        console.log('✅ СДЭК доставка инициализирована');
+        
     }
     
     function hideUnnecessaryFields() {
@@ -2271,15 +2270,15 @@ jQuery(document).ready(function($) {
         var selectedValue = $(this).val();
         var isChecked = $(this).is(':checked');
         
-        console.log('🔄 Переключение способа доставки:', selectedValue, 'Выбран:', isChecked);
+        
         
         if (selectedValue && selectedValue.indexOf('cdek_delivery') !== -1 && isChecked) {
-            console.log('✅ Выбрана доставка CDEK - показываем карту');
+            
             debouncer.debounce('init-cdek', () => initCdekDelivery(), 100, 8);
         } else if ($(this).attr('name') && $(this).attr('name').indexOf('shipping_method') !== -1 && isChecked) {
             var mapContainer = $('#cdek-map-container');
             if (mapContainer.length > 0) {
-                console.log('🙈 Выбран другой способ доставки - скрываем карту CDEK');
+                
                 mapContainer.hide();
                 resetCdekShippingToDefault();
             }
@@ -2289,40 +2288,40 @@ jQuery(document).ready(function($) {
     // Обработчик для блоков WooCommerce (новая система оформления)
     $(document).on('click', '.wc-block-checkout__shipping-method-option', function() {
         var methodTitle = $(this).find('.wc-block-checkout__shipping-method-option-title').text().trim();
-        console.log('🔄 Клик по способу доставки:', methodTitle);
+        
         
         setTimeout(() => {
             var isSelected = $(this).attr('aria-checked') === 'true';
-            console.log('🔄 Состояние после клика - Способ:', methodTitle, 'Выбран:', isSelected);
+            
             
             if (methodTitle === 'Доставка' && isSelected) {
-                console.log('✅ Выбрана "Доставка" - показываем карту CDEK');
+                
                 
                 // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
                 var mapBlock = $('.wp-block-cdek-checkout-map-block');
                 if (mapBlock.length > 0) {
                     mapBlock.show();
                     mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
-                    console.log('🔧 Принудительно показан блок wp-block-cdek-checkout-map-block');
+                    
                 }
                 
                 // Проверяем состояние карты и переинициализируем если нужно
                 setTimeout(() => {
                     var mapElement = document.getElementById('cdek-map');
                     if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
-                        console.log('🔄 Карта не видна, переинициализируем...');
+                        
                         cdekMap = null;
                         initYandexMap();
                         
                         // Восстанавливаем ПВЗ если они есть
                         if (cdekPoints && cdekPoints.length > 0) {
                             setTimeout(() => {
-                                console.log('📍 Восстанавливаем ПВЗ на карте');
+                                
                                 displayCdekPoints(cdekPoints);
                             }, 1000);
                         }
                     } else {
-                        console.log('✅ Карта уже видна и готова');
+                        
                         // Просто показываем существующую карту
                         if (mapElement) {
                             mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
@@ -2331,13 +2330,13 @@ jQuery(document).ready(function($) {
                 }, 200);
                 
             } else if (methodTitle === 'Самовывоз' && isSelected) {
-                console.log('🙈 Выбран "Самовывоз" - скрываем карту CDEK');
+                
                 
                 // Скрываем блок карты
                 var mapBlock = $('.wp-block-cdek-checkout-map-block');
                 if (mapBlock.length > 0) {
                     mapBlock.hide();
-                    console.log('🔧 Скрыт блок wp-block-cdek-checkout-map-block');
+                    
                 }
             }
         }, 100);
@@ -2451,11 +2450,11 @@ jQuery(document).ready(function($) {
     window.lastSelectedPointCode = null;
     window.currentSearchCity = null;
     
-    console.log('🚀 СДЭК Delivery Fixed v2.6.2 загружен');
-    console.log('✅ Исправления: умный поиск, индикаторы загрузки, производительность');
-    console.log('🔍 Предотвращение повторных поисков');
-    console.log('🏙️ Поддержка 1000+ городов России');
-    console.log('📱 Оптимизировано для мобильных устройств');
+    
+    
+    
+    
+    
     
             // MutationObserver для отслеживания изменений aria-checked в способах доставки
         const shippingObserver = new MutationObserver((mutations) => {
@@ -2466,13 +2465,13 @@ jQuery(document).ready(function($) {
                     var titleElement = target.querySelector('.wc-block-checkout__shipping-method-option-title');
                     var title = titleElement ? titleElement.textContent.trim() : '';
                     
-                    console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
+                    
                     
                     if (title === 'Доставка' && isSelected) {
-                        console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
+                        
                         showMapForDelivery();
                     } else if (isSelected && (title === 'Самовывоз' || title === 'Обсудить доставку с менеджером')) {
-                        console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
+                        
                         hideMapForOtherMethods();
                     }
                 }
@@ -2485,33 +2484,23 @@ jQuery(document).ready(function($) {
             var mapContainer = $('#cdek-map-container');
             var mapElement = $('#cdek-map');
             
-            console.log('🗺️ Показываем карту для доставки');
-            console.log('📍 Элементы:', {
-                mapBlock: mapBlock.length,
-                mapContainer: mapContainer.length,
-                mapElement: mapElement.length
-            });
-            
             // Показываем блок карты если он существует
             if (mapBlock.length > 0) {
                 mapBlock.show();
                 mapBlock.each(function() {
                     this.style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
                 });
-                console.log('🔧 Принудительно показан wp-block-cdek-checkout-map-block');
             }
             
             // Показываем контейнер карты
             if (mapContainer.length > 0) {
                 mapContainer.show();
                 mapContainer[0].style.cssText = 'display: block !important; visibility: visible !important; position: relative !important;';
-                console.log('🔧 Показан cdek-map-container');
                 
                 // ИСПРАВЛЕНИЕ: Всегда пересоздаём элемент карты для надежности
                 if (mapElement.length === 0) {
                     mapContainer.html('<div id="cdek-map" style="width: 100%; height: 450px; display: block !important;"></div>');
                     mapElement = $('#cdek-map'); // Обновляем ссылку
-                    console.log('🔧 Создан новый элемент карты');
                 }
             } else {
                 // Если нет контейнера карты, создаём его
@@ -2521,7 +2510,6 @@ jQuery(document).ready(function($) {
                     targetBlock.after(mapHtml);
                     mapContainer = $('#cdek-map-container');
                     mapElement = $('#cdek-map');
-                    console.log('🔧 Создан новый контейнер карты');
                 }
             }
             
@@ -2535,7 +2523,6 @@ jQuery(document).ready(function($) {
                         // Игнорируем ошибки при удалении
                     }
                     cdekMap = null;
-                    console.log('🔄 Предыдущая карта удалена');
                 }
                 
                 // Убеждаемся что элемент карты готов
@@ -2552,12 +2539,9 @@ jQuery(document).ready(function($) {
                     // Восстанавливаем ПВЗ с задержкой
                     if (cdekPoints && cdekPoints.length > 0) {
                         setTimeout(() => {
-                            console.log('📍 Восстанавливаем ПВЗ после пересоздания карты');
                             displayCdekPoints(cdekPoints);
                         }, 2000); // Увеличиваем задержку для надежности
                     }
-                } else {
-                    console.log('❌ Не удалось найти элемент карты для инициализации');
                 }
             }, 100);
         }
@@ -2565,8 +2549,6 @@ jQuery(document).ready(function($) {
         function hideMapForOtherMethods() {
             var mapBlock = $('.wp-block-cdek-checkout-map-block');
             var mapContainer = $('#cdek-map-container');
-            
-            console.log('🙈 Скрываем карту для других методов доставки');
             
             // ИСПРАВЛЕНИЕ: Не удаляем элементы, а только скрываем их
             if (mapBlock.length > 0) {
@@ -2576,7 +2558,6 @@ jQuery(document).ready(function($) {
                     'height': '0',
                     'overflow': 'hidden'
                 });
-                console.log('🔧 Скрыт wp-block-cdek-checkout-map-block');
             }
             
             if (mapContainer.length > 0) {
@@ -2586,7 +2567,6 @@ jQuery(document).ready(function($) {
                     'height': '0',
                     'overflow': 'hidden'
                 });
-                console.log('🔧 Скрыт cdek-map-container');
             }
             
             // ИСПРАВЛЕНИЕ: Сохраняем ссылку на карту но останавливаем её обновления
@@ -2598,7 +2578,7 @@ jQuery(document).ready(function($) {
                         mapElement.style.display = 'none';
                     }
                 } catch (e) {
-                    console.log('⚠️ Ошибка при скрытии карты:', e.message);
+                    // Игнорируем ошибки
                 }
             }
         }
@@ -2615,12 +2595,12 @@ jQuery(document).ready(function($) {
             var titleElement = $(this).find('.wc-block-checkout__shipping-method-option-title');
             var title = titleElement.text().trim();
             
-            console.log('👆 Клик по вкладке доставки:', title);
+            
             
             // Даём время на обновление aria-checked и затем проверяем состояние
             setTimeout(() => {
                 var isSelected = $(this).attr('aria-checked') === 'true';
-                console.log('👆 После клика, выбрана:', title, isSelected);
+                
                 
                 if (title === 'Доставка' && isSelected) {
                     showMapForDelivery();
