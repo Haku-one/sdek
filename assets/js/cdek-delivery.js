@@ -1238,19 +1238,59 @@ jQuery(document).ready(function($) {
     }
     
     function geocodeAddress(address, callback) {
+        // Быстрое определение координат для основных городов
+        var cityCoordinates = {
+            'москва': [55.7558, 37.6176],
+            'санкт-петербург': [59.9386, 30.3141],
+            'спб': [59.9386, 30.3141],
+            'новосибирск': [55.0415, 82.9346],
+            'екатеринбург': [56.8431, 60.6454],
+            'казань': [55.8304, 49.0661],
+            'нижний новгород': [56.2965, 43.9361],
+            'челябинск': [55.1644, 61.4368],
+            'самара': [53.2415, 50.2212],
+            'уфа': [54.7388, 55.9721],
+            'ростов-на-дону': [47.2357, 39.7015],
+            'краснодар': [45.0355, 38.9753],
+            'пермь': [58.0105, 56.2502],
+            'воронеж': [51.6720, 39.1843],
+            'волгоград': [48.7080, 44.5133],
+            'красноярск': [56.0184, 92.8672],
+            'саратов': [51.5924, 46.0348], // Добавляем координаты Саратова
+            'тюмень': [57.1522, 65.5272],
+            'тольятти': [53.5303, 49.3461],
+            'ижевск': [56.8527, 53.2118],
+            'барнаул': [53.3606, 83.7636],
+            'курск': [51.7373, 36.1873] // Добавляем координаты Курска
+        };
+        
+        var searchCity = address.toLowerCase().trim();
+        
+        // Проверяем, есть ли координаты для этого города
+        if (cityCoordinates[searchCity]) {
+            console.log('✅ Найдены координаты для города', address, ':', cityCoordinates[searchCity]);
+            callback(cityCoordinates[searchCity]);
+            return;
+        }
+        
+        // Если координат нет, используем Яндекс.Карты
         if (typeof ymaps !== 'undefined') {
             ymaps.geocode(address, { results: 1 }).then(function(res) {
                 if (res.geoObjects.getLength() > 0) {
                     var firstGeoObject = res.geoObjects.get(0);
                     var coords = firstGeoObject.geometry.getCoordinates();
+                    console.log('✅ Координаты получены от Яндекс.Карт для', address, ':', coords);
                     callback(coords);
                 } else {
+                    console.log('⚠️ Координаты не найдены для', address);
                     callback(null);
                 }
             }).catch(function(error) {
+                console.log('❌ Ошибка геокодирования для', address, ':', error);
                 callback(null);
             });
         } else {
+            console.log('❌ Яндекс.Карты не доступны');
             callback(null);
         }
     }
@@ -1395,20 +1435,13 @@ jQuery(document).ready(function($) {
             if (window.currentSearchCity) {
                 var pointCity = '';
                 
-                // Пытаемся получить город из разных полей
+                // ПРАВИЛЬНАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ ПОИСКА ГОРОДА (на основе анализа структуры)
+                // 1. Основное поле - point.location.city
                 if (point.location && point.location.city) {
                     pointCity = point.location.city.trim();
                 }
                 
-                // Если не нашли в location.city, ищем в address
-                if (!pointCity && point.location && point.location.address) {
-                    var addressParts = point.location.address.split(',');
-                    if (addressParts.length > 0) {
-                        pointCity = addressParts[0].trim();
-                    }
-                }
-                
-                // Если не нашли в address, ищем в name
+                // 2. Если не нашли, ищем в name (второй элемент после запятой)
                 if (!pointCity && point.name && point.name.includes(',')) {
                     var nameParts = point.name.split(',');
                     if (nameParts.length >= 2) {
@@ -1416,17 +1449,25 @@ jQuery(document).ready(function($) {
                     }
                 }
                 
-                // Если не нашли в name, ищем в полном адресе
+                // 3. Если не нашли, ищем в address
+                if (!pointCity && point.location && point.location.address) {
+                    var addressParts = point.location.address.split(',');
+                    if (addressParts.length > 0) {
+                        pointCity = addressParts[0].trim();
+                    }
+                }
+                
+                // 4. Корневое поле city (если есть)
+                if (!pointCity && point.city) {
+                    pointCity = point.city.trim();
+                }
+                
+                // 5. address_comment (если есть)
                 if (!pointCity && point.address_comment) {
                     var commentParts = point.address_comment.split(',');
                     if (commentParts.length > 0) {
                         pointCity = commentParts[0].trim();
                     }
-                }
-                
-                // НОВЫЙ СПОСОБ: ищем в корневом поле city
-                if (!pointCity && point.city) {
-                    pointCity = point.city.trim();
                 }
                 
                 if (pointCity) {
@@ -1436,13 +1477,32 @@ jQuery(document).ready(function($) {
                 var searchCityLower = window.currentSearchCity.toLowerCase().trim();
                 var pointCityLower = pointCity.toLowerCase().trim();
                 
-                // Более гибкое сравнение - проверяем вхождение
+                // УЛУЧШЕННОЕ СРАВНЕНИЕ ГОРОДОВ
                 if (pointCityLower && searchCityLower) {
-                    if (pointCityLower !== searchCityLower && 
-                        !pointCityLower.includes(searchCityLower) && 
-                        !searchCityLower.includes(pointCityLower)) {
+                    // Точное совпадение
+                    if (pointCityLower === searchCityLower) {
+                        return true;
+                    }
+                    
+                    // Один город содержится в другом
+                    if (pointCityLower.includes(searchCityLower) || searchCityLower.includes(pointCityLower)) {
+                        return true;
+                    }
+                    
+                    // Для коротких поисковых запросов (меньше 4 символов) - строгое совпадение
+                    if (searchCityLower.length < 4) {
                         return false;
                     }
+                    
+                    // Для длинных - проверяем начало
+                    if (pointCityLower.startsWith(searchCityLower) || searchCityLower.startsWith(pointCityLower)) {
+                        return true;
+                    }
+                    
+                    return false;
+                } else {
+                    // Если не удалось определить город пункта - не показываем
+                    return false;
                 }
             }
             
@@ -2181,66 +2241,89 @@ jQuery(document).ready(function($) {
     
     // Обработчик для блоков WooCommerce (новая система оформления)
     $(document).on('click', '.wc-block-checkout__shipping-method-option', function() {
-        var titleElement = $(this).find('.wc-block-checkout__shipping-method-option-title');
+        var $clickedOption = $(this);
+        var titleElement = $clickedOption.find('.wc-block-checkout__shipping-method-option-title');
         var title = titleElement.text().trim();
-        var isSelected = $(this).hasClass('wc-block-checkout__shipping-method-option--selected');
         
-        console.log('🔄 Клик по способу доставки в блоке:', title, 'Выбран:', isSelected);
+        console.log('🔄 Клик по способу доставки:', title);
         
+        // Немедленно проверяем состояние после клика
         setTimeout(() => {
+            var isSelected = $clickedOption.attr('aria-checked') === 'true' || 
+                           $clickedOption.hasClass('wc-block-checkout__shipping-method-option--selected');
+            
+            console.log('🔄 Состояние после клика - Способ:', title, 'Выбран:', isSelected);
+            
             var mapContainer = $('#cdek-map-container');
             
-            if (title.includes('СДЭК') || title.includes('Выберите пункт выдачи') || title.includes('Доставка')) {
-                console.log('✅ Выбрана доставка CDEK через блок - показываем карту');
-                if (mapContainer.length > 0) {
-                    mapContainer.show();
-                }
-                debouncer.debounce('init-cdek-block', () => initCdekDelivery(), 200, 8);
-            } else {
-                console.log('🙈 Выбран другой способ доставки через блок - скрываем карту CDEK');
-                if (mapContainer.length > 0) {
-                    mapContainer.hide();
-                    resetCdekShippingToDefault();
-                }
-            }
-        }, 100);
-    });
-    
-    // Дополнительный обработчик для современных блоков WooCommerce
-    $(document).on('change click', '[role="radio"], input[type="radio"]', function() {
-        var $this = $(this);
-        var isShippingMethod = $this.closest('.wc-block-checkout__shipping-method-container, .wc-block-components-shipping-rates-control').length > 0;
-        
-        if (isShippingMethod) {
-            var title = '';
-            var labelElement = $this.closest('label, .wc-block-checkout__shipping-method-option').find('.wc-block-checkout__shipping-method-option-title, span');
-            if (labelElement.length > 0) {
-                title = labelElement.text().trim();
-            }
-            
-            var isSelected = $this.is(':checked') || $this.attr('aria-checked') === 'true';
-            
-            console.log('🔄 Изменение radio доставки:', title, 'Выбран:', isSelected);
-            
-            setTimeout(() => {
-                var mapContainer = $('#cdek-map-container');
-                
-                if (isSelected && (title.includes('СДЭК') || title.includes('Выберите пункт выдачи') || title.includes('Доставка'))) {
-                    console.log('✅ Выбрана доставка CDEK через radio - показываем карту');
+            if (isSelected) {
+                if (title === 'Доставка') {
+                    console.log('✅ Выбрана "Доставка" - показываем карту CDEK');
                     if (mapContainer.length === 0) {
-                        initCdekDelivery();
+                        debouncer.debounce('init-cdek-delivery', () => initCdekDelivery(), 200, 8);
                     } else {
                         mapContainer.show();
+                        // Убеждаемся что карта инициализирована
+                        if (!cdekMap && typeof ymaps !== 'undefined') {
+                            setTimeout(() => initYandexMap(), 500);
+                        }
                     }
-                } else if (isSelected) {
-                    console.log('🙈 Выбран другой способ доставки через radio - скрываем карту CDEK');
+                } else if (title === 'Самовывоз') {
+                    console.log('🙈 Выбран "Самовывоз" - скрываем карту CDEK');
+                    if (mapContainer.length > 0) {
+                        mapContainer.hide();
+                        resetCdekShippingToDefault();
+                    }
+                } else if (title === 'Обсудить доставку с менеджером') {
+                    console.log('💬 Выбрано "Обсудить с менеджером" - скрываем карту CDEK');
                     if (mapContainer.length > 0) {
                         mapContainer.hide();
                         resetCdekShippingToDefault();
                     }
                 }
-            }, 150);
-        }
+            }
+        }, 100);
+    });
+    
+    // Дополнительный обработчик через MutationObserver для отслеживания изменений aria-checked
+    var tabObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
+                var $target = $(mutation.target);
+                if ($target.hasClass('wc-block-checkout__shipping-method-option')) {
+                    var title = $target.find('.wc-block-checkout__shipping-method-option-title').text().trim();
+                    var isSelected = $target.attr('aria-checked') === 'true';
+                    
+                    console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
+                    
+                    if (isSelected) {
+                        var mapContainer = $('#cdek-map-container');
+                        
+                        if (title === 'Доставка') {
+                            console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
+                            if (mapContainer.length === 0) {
+                                                                 debouncer.debounce('init-cdek-aria', () => initCdekDelivery(), 200, 8);
+                            } else {
+                                mapContainer.show();
+                            }
+                        } else {
+                            console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
+                            if (mapContainer.length > 0) {
+                                mapContainer.hide();
+                                resetCdekShippingToDefault();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+    
+    // Начинаем наблюдение за изменениями
+    tabObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['aria-checked'],
+        subtree: true
     });
     
     $(document).on('click', 'input[value*="cdek_delivery"]', function() {
