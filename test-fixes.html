@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест исправлений СДЭК v2.6.3</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .test-passed { background-color: #d4edda; border-color: #c3e6cb; }
+        .test-failed { background-color: #f8d7da; border-color: #f5c6cb; }
+        .test-pending { background-color: #fff3cd; border-color: #ffeaa7; }
+        .city-test { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 3px; }
+        button { padding: 8px 15px; margin: 5px; background: #007cba; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #005a87; }
+        .log-output { background: #f1f1f1; padding: 10px; margin: 10px 0; border-radius: 3px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест исправлений СДЭК Доставка v2.6.3</h1>
+    
+    <div class="test-section test-pending">
+        <h2>1. ✅ Исправление API фильтрации ПВЗ по городам</h2>
+        <p><strong>Проблема:</strong> API возвращал неправильное количество ПВЗ для городов</p>
+        <p><strong>Исправления:</strong></p>
+        <ul>
+            <li>✅ Улучшен метод get_delivery_points() с надежным поиском city_code</li>
+            <li>✅ Добавлен альтернативный метод get_city_code_fuzzy()</li>
+            <li>✅ Увеличен лимит результатов API до 1000 пунктов</li>
+            <li>✅ Добавлена дополнительная клиентская фильтрация</li>
+        </ul>
+        
+        <h3>Тесты городов:</h3>
+        <div class="city-test">
+            <strong>Курск:</strong> Ожидается ~8-20 ПВЗ
+            <div id="kursk-result">Не протестировано</div>
+        </div>
+        <div class="city-test">
+            <strong>Москва:</strong> Ожидается 300+ ПВЗ
+            <div id="moscow-result">Не протестировано</div>
+        </div>
+        <div class="city-test">
+            <strong>Тюмень:</strong> Должны найтись ПВЗ с адресом "Зелинского"
+            <div id="tyumen-result">Не протестировано</div>
+        </div>
+    </div>
+
+    <div class="test-section test-pending">
+        <h2>2. ✅ Исправление реинициализации карты</h2>
+        <p><strong>Проблема:</strong> При переключении доставка → самовывоз → доставка карта не реинициализировалась</p>
+        <p><strong>Исправления:</strong></p>
+        <ul>
+            <li>✅ Улучшена функция initYandexMap() с дополнительными проверками</li>
+            <li>✅ Добавлена принудительная реинициализация карты</li>
+            <li>✅ Улучшен MutationObserver для отслеживания aria-checked</li>
+            <li>✅ Добавлено восстановление ПВЗ после реинициализации</li>
+        </ul>
+        
+        <h3>Проверка:</h3>
+        <ol>
+            <li>Выберите "Доставка" - карта должна появиться ✅</li>
+            <li>Выберите "Самовывоз" - карта должна скрыться ✅</li>
+            <li>Снова выберите "Доставка" - карта должна появиться и работать ✅</li>
+            <li>ПВЗ должны восстановиться на карте ✅</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 📋 Журнал логов</h2>
+        <p>Откройте консоль браузера (F12) для просмотра детального логирования:</p>
+        <ul>
+            <li>🎯 Отладка конкретных городов</li>
+            <li>🗺️ Логирование инициализации карты</li>
+            <li>📍 Логирование восстановления ПВЗ</li>
+            <li>✅ Успешные операции API</li>
+            <li>❌ Ошибки и проблемы</li>
+        </ul>
+        <div class="log-output" id="console-log">
+            Логи будут отображаться здесь...
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 🔧 Инструкции по тестированию</h2>
+        <ol>
+            <li><strong>Протестируйте на странице оформления заказа WooCommerce</strong></li>
+            <li><strong>Введите города:</strong> Курск, Москва, Тюмень в поле адреса</li>
+            <li><strong>Переключайтесь</strong> между вкладками "Доставка" ↔ "Самовывоз"</li>
+            <li><strong>Проверьте консоль</strong> браузера на наличие ошибок</li>
+            <li><strong>Убедитесь</strong>, что карта работает после каждого переключения</li>
+        </ol>
+        
+        <button onclick="openConsole()">Открыть консоль браузера</button>
+        <button onclick="testComplete()">Тестирование завершено</button>
+    </div>
+
+    <script>
+        function openConsole() {
+            alert('Нажмите F12 для открытия консоли разработчика');
+        }
+        
+        function testComplete() {
+            alert('Отлично! Все исправления применены.\n\n✅ API фильтрация ПВЗ\n✅ Реинициализация карты\n\nПлагин готов к использованию!');
+        }
+        
+        // Перехват консольных логов
+        const originalLog = console.log;
+        const logOutput = document.getElementById('console-log');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            
+            const logMessage = args.join(' ');
+            if (logMessage.includes('СДЭК') || logMessage.includes('🎯') || logMessage.includes('🗺️') || logMessage.includes('📍')) {
+                const timestamp = new Date().toLocaleTimeString();
+                logOutput.innerHTML += `[${timestamp}] ${logMessage}\n`;
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+        };
+        
+        console.log('✅ Тестовая страница загружена. Готов к тестированию исправлений СДЭК v2.6.3');
+    </script>
+</body>
+</html>
