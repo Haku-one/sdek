@@ -576,16 +576,26 @@ class CdekAPI {
         
         // Извлекаем город из адреса
         $city = $this->extract_city_from_address($address);
-        error_log('СДЭК API: Ищем пункты для города: ' . $city);
+        error_log('СДЭК API: Ищем пункты для города: ' . ($city ? $city : 'все города России'));
         
-        // Строим URL с параметрами для GET запроса
-        $url = add_query_arg(array(
-            'city' => $city,
+        // Строим параметры запроса для получения максимального количества ПВЗ
+        $params = array(
             'type' => 'PVZ', // Пункты выдачи заказов
             'have_cash' => 'true',
             'have_cashless' => 'true',
-            'is_handout' => 'true'
-        ), $this->base_url . '/deliverypoints');
+            'is_handout' => 'true',
+            'country_code' => 'RU', // Добавляем код страны для России
+            'size' => 5000, // Максимальное количество результатов на страницу
+            'page' => 0 // Первая страница
+        );
+        
+        // Добавляем город только если он указан
+        if (!empty($city)) {
+            $params['city'] = $city;
+        }
+        
+        // Строим URL с параметрами для GET запроса
+        $url = add_query_arg($params, $this->base_url . '/deliverypoints');
         
         error_log('СДЭК API: URL запроса: ' . $url);
         
@@ -593,21 +603,39 @@ class CdekAPI {
             'headers' => array(
                 'Authorization' => 'Bearer ' . $token,
                 'Content-Type' => 'application/json'
-            )
+            ),
+            'timeout' => 30 // Увеличиваем таймаут для больших запросов
         ));
         
         if (!is_wp_error($response)) {
+            $response_code = wp_remote_retrieve_response_code($response);
             $body = json_decode(wp_remote_retrieve_body($response), true);
-            error_log('СДЭК API: Ответ от сервера: ' . print_r($body, true));
             
-            if (isset($body['entity'])) {
-                error_log('СДЭК API: Найдено пунктов в entity: ' . count($body['entity']));
-                return $body['entity'];
+            error_log('СДЭК API: Код ответа: ' . $response_code);
+            error_log('СДЭК API: Размер ответа: ' . strlen(wp_remote_retrieve_body($response)) . ' байт');
+            
+            if ($response_code === 200 && $body) {
+                // Проверяем различные форматы ответа СДЭК API
+                if (isset($body['entity']) && is_array($body['entity'])) {
+                    error_log('СДЭК API: ✅ Найдено пунктов в entity: ' . count($body['entity']));
+                    return $body['entity'];
+                } elseif (is_array($body) && !empty($body)) {
+                    // Если ответ - массив пунктов напрямую
+                    error_log('СДЭК API: ✅ Найдено пунктов в корне ответа: ' . count($body));
+                    return $body;
+                } else {
+                    error_log('СДЭК API: ⚠️ Неожиданный формат ответа: ' . print_r($body, true));
+                    return array();
+                }
+            } else {
+                error_log('СДЭК API: ❌ Ошибка API, код: ' . $response_code);
+                if (isset($body['errors'])) {
+                    error_log('СДЭК API: Ошибки: ' . print_r($body['errors'], true));
+                }
+                return array();
             }
-            error_log('СДЭК API: Возвращаем весь ответ: ' . count($body));
-            return $body;
         } else {
-            error_log('СДЭК API: Ошибка запроса: ' . $response->get_error_message());
+            error_log('СДЭК API: ❌ Ошибка HTTP запроса: ' . $response->get_error_message());
         }
         
         return array();
@@ -922,9 +950,23 @@ class CdekAPI {
     }
     
     private function extract_city_from_address($address) {
-        // Простое извлечение города из адреса
-        // Предполагаем, что город указан в начале адреса
-        $parts = explode(',', $address);
-        return trim($parts[0]);
+        // Улучшенное извлечение города из адреса
+        $address = trim($address);
+        
+        // Если адрес "Россия", возвращаем пустую строку для поиска по всем городам
+        if (strtolower($address) === 'россия' || strtolower($address) === 'russia') {
+            error_log('СДЭК API: Адрес "Россия" - будем искать по всем городам');
+            return '';
+        }
+        
+        // Очищаем от префиксов "г.", "город", "г "
+        $city = preg_replace('/^(г\.?\s*|город\s+)/ui', '', $address);
+        
+        // Если есть запятые, берем первую часть
+        $parts = explode(',', $city);
+        $city = trim($parts[0]);
+        
+        error_log('СДЭК API: Извлеченный город: ' . $city);
+        return $city;
     }
 }

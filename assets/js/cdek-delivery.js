@@ -1293,14 +1293,22 @@ jQuery(document).ready(function($) {
         });
     }
     
-    function performCdekSearch() {
-        if (typeof cdek_ajax === 'undefined') return;
+    // Функция для загрузки всех ПВЗ России
+    function loadAllCdekPoints() {
+        console.log('🌍 Загружаем все ПВЗ России...');
+        showPvzLoader();
         
+        // Очищаем текущий поиск
+        window.currentSearchCity = null;
+        window.currentSearchStreet = null;
+        window.currentSearchCoordinates = null;
+        
+        // Отправляем запрос с адресом "Россия" для получения всех ПВЗ
         $.ajax({
             url: cdek_ajax.ajax_url,
             type: 'POST',
             dataType: 'json',
-            timeout: 30000,
+            timeout: 60000, // Увеличиваем таймаут для загрузки всех ПВЗ
             data: {
                 action: 'get_cdek_points',
                 address: 'Россия',
@@ -1309,8 +1317,49 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 hidePvzLoader();
                 if (response.success && response.data) {
+                    console.log('✅ Загружено всех ПВЗ России:', response.data.length);
                     displayCdekPoints(response.data);
                 } else {
+                    console.error('❌ Ошибка загрузки всех ПВЗ:', response);
+                    showPvzError('Не удалось загрузить все пункты выдачи');
+                }
+            },
+            error: function(xhr, status, error) {
+                hidePvzLoader();
+                console.error('❌ Ошибка HTTP при загрузке всех ПВЗ:', error);
+                showPvzError('Ошибка загрузки всех пунктов выдачи');
+            }
+        });
+    }
+    
+    function performCdekSearch() {
+        if (typeof cdek_ajax === 'undefined') return;
+        
+        // Формируем адрес для поиска - используем конкретный город, если он известен
+        var searchAddress = 'Россия';
+        if (window.currentSearchCity) {
+            searchAddress = window.currentSearchCity;
+        }
+        
+        console.log('🔍 Отправляем запрос к API СДЭК для адреса:', searchAddress);
+        
+        $.ajax({
+            url: cdek_ajax.ajax_url,
+            type: 'POST',
+            dataType: 'json',
+            timeout: 30000,
+            data: {
+                action: 'get_cdek_points',
+                address: searchAddress,
+                nonce: cdek_ajax.nonce
+            },
+            success: function(response) {
+                hidePvzLoader();
+                if (response.success && response.data) {
+                    console.log('✅ Получено ПВЗ от API:', response.data.length);
+                    displayCdekPoints(response.data);
+                } else {
+                    console.error('❌ Ошибка получения ПВЗ:', response);
                     showPvzError('Не удалось загрузить пункты выдачи');
                 }
             },
@@ -1386,7 +1435,7 @@ jQuery(document).ready(function($) {
             });
         }
         
-        var maxPoints = 380; // Показываем все доступные ПВЗ
+        var maxPoints = 1000; // Увеличиваем лимит для отображения большего количества ПВЗ
         var pointsToShow = filteredPoints.slice(0, maxPoints);
         
         var pointsInfo = '';
@@ -1851,6 +1900,17 @@ jQuery(document).ready(function($) {
                     <div id="cdek-points-info" style="margin-bottom: 10px; padding: 10px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px;">
                         <strong>Информация:</strong>
                         <div id="cdek-points-count">Введите город в поле адреса выше для поиска пунктов выдачи</div>
+                        <div style="margin-top: 10px;">
+                            <button id="load-all-cdek-points" type="button" style="
+                                background: #4CAF50;
+                                color: white;
+                                border: none;
+                                padding: 8px 16px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-size: 14px;
+                            ">🌍 Показать все ПВЗ России</button>
+                        </div>
                     </div>
                     <div id="cdek-selected-point" style="margin-bottom: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; display: none;">
                         <strong>Выбранный пункт:</strong>
@@ -1957,6 +2017,12 @@ jQuery(document).ready(function($) {
         if (city.length > 2) {
             debouncer.debounce('address-change', () => searchCdekPoints(city), 500, 4);
         }
+    });
+    
+    // Обработчик кнопки "Показать все ПВЗ России"
+    $(document).on('click', '#load-all-cdek-points', function() {
+        console.log('🌍 Нажата кнопка загрузки всех ПВЗ России');
+        loadAllCdekPoints();
     });
     
     var observer = new MutationObserver(function(mutations) {
