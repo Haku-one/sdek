@@ -85,6 +85,9 @@ class CdekDeliveryPlugin {
         // Добавляем поддержку Store API
         add_action('init', array($this, 'init_store_api_support'));
         
+        // Загружаем расширение Store API
+        add_action('plugins_loaded', array($this, 'load_store_api_extension'));
+        
         // AJAX для проверки подключения
         add_action('wp_ajax_test_cdek_connection', array($this, 'ajax_test_cdek_connection'));
         
@@ -791,6 +794,31 @@ class CdekDeliveryPlugin {
             error_log('CDEK: Ошибка регистрации blocks integration: ' . $e->getMessage());
         } catch (Error $e) {
             error_log('CDEK: Фатальная ошибка при регистрации blocks integration: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Загружает расширение Store API для СДЭК
+     */
+    public function load_store_api_extension() {
+        try {
+            // Проверяем, что WooCommerce загружен
+            if (!class_exists('WooCommerce')) {
+                return;
+            }
+            
+            // Подключаем класс расширения Store API
+            if (file_exists(plugin_dir_path(__FILE__) . 'includes/class-cdek-store-api-extension.php')) {
+                require_once plugin_dir_path(__FILE__) . 'includes/class-cdek-store-api-extension.php';
+                error_log('CDEK: Store API extension загружен');
+            } else {
+                error_log('CDEK: Файл Store API extension не найден');
+            }
+            
+        } catch (Exception $e) {
+            error_log('CDEK: Ошибка загрузки Store API extension: ' . $e->getMessage());
+        } catch (Error $e) {
+            error_log('CDEK: Фатальная ошибка при загрузке Store API extension: ' . $e->getMessage());
         }
     }
     
@@ -1879,9 +1907,18 @@ class CdekAPI {
         try {
             error_log('CDEK: Начинаем регистрацию REST полей');
             
-            // Простая и надежная регистрация без проверки Store API
-            add_action('woocommerce_store_api_checkout_update_order_meta', array($this, 'save_cdek_data_from_store_api'));
-            add_filter('woocommerce_store_api_checkout_order_received_object', array($this, 'add_cdek_data_to_order_response'), 10, 3);
+            // Простая регистрация для совместимости с Store API
+            if (class_exists('Automattic\WooCommerce\StoreApi\StoreApi')) {
+                // Регистрируем обработчики для Store API только если он доступен
+                add_action('woocommerce_store_api_checkout_update_order_meta', array($this, 'save_cdek_data_from_store_api'));
+                add_filter('woocommerce_store_api_checkout_order_received_object', array($this, 'add_cdek_data_to_order_response'), 10, 3);
+                error_log('CDEK: Store API обработчики зарегистрированы');
+            } else {
+                error_log('CDEK: Store API недоступен, пропускаем регистрацию');
+            }
+            
+            // Дополнительно регистрируем обработчики для REST API
+            add_action('woocommerce_rest_checkout_process_payment', array($this, 'save_cdek_data_from_rest'), 10, 2);
             
             error_log('CDEK: REST поля успешно зарегистрированы');
             
