@@ -52,6 +52,10 @@ class CdekDeliveryPlugin {
         add_action('wp_ajax_get_address_suggestions', array($this, 'ajax_get_address_suggestions'));
         add_action('wp_ajax_nopriv_get_address_suggestions', array($this, 'ajax_get_address_suggestions'));
         
+        // НОВОЕ: AJAX для сохранения данных СДЭК в сессии
+        add_action('wp_ajax_save_cdek_data_to_session', array($this, 'ajax_save_cdek_data_to_session'));
+        add_action('wp_ajax_nopriv_save_cdek_data_to_session', array($this, 'ajax_save_cdek_data_to_session'));
+        
         // Регистрация настроек плагина
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
@@ -139,9 +143,19 @@ class CdekDeliveryPlugin {
             wp_enqueue_script('yandex-maps', 'https://api-maps.yandex.ru/2.1/?apikey=4020b4d5-1d96-476c-a10e-8ab18f0f3702&lang=ru_RU', array(), null, true);
             
             wp_enqueue_script('cdek-delivery-js', CDEK_DELIVERY_PLUGIN_URL . 'assets/js/cdek-delivery.js', array('jquery', 'yandex-maps'), '2.6.2', true);
+            
+            // НОВОЕ: Подключаем обработчик сессии
+            wp_enqueue_script('cdek-session-handler', CDEK_DELIVERY_PLUGIN_URL . 'assets/js/cdek-session-handler.js', array('jquery', 'cdek-delivery-js'), '1.0.0', true);
+            
             wp_enqueue_style('cdek-delivery-css', CDEK_DELIVERY_PLUGIN_URL . 'assets/css/cdek-delivery.css', array(), '2.6.2');
             
             wp_localize_script('cdek-delivery-js', 'cdek_ajax', array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('cdek_nonce')
+            ));
+            
+            // Также локализуем для обработчика сессии
+            wp_localize_script('cdek-session-handler', 'cdek_ajax', array(
                 'ajax_url' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('cdek_nonce')
             ));
@@ -316,6 +330,49 @@ class CdekDeliveryPlugin {
         }
         
         return array_slice($suggestions, 0, 10);
+    }
+    
+    /**
+     * AJAX метод для сохранения данных СДЭК в сессии
+     */
+    public function ajax_save_cdek_data_to_session() {
+        try {
+            if (!wp_verify_nonce($_POST['nonce'], 'cdek_nonce')) {
+                wp_die('Security check failed');
+            }
+            
+            error_log('CDEK AJAX: Сохраняем данные в сессии');
+            
+            // Инициализируем сессию WooCommerce если её нет
+            if (!WC()->session) {
+                WC()->session = new WC_Session_Handler();
+                WC()->session->init();
+            }
+            
+            // Сохраняем данные о выбранном пункте выдачи
+            if (isset($_POST['point_code']) && isset($_POST['point_data'])) {
+                $point_data = array(
+                    'code' => sanitize_text_field($_POST['point_code']),
+                    'data' => json_decode(stripslashes($_POST['point_data']), true)
+                );
+                
+                WC()->session->set('cdek_selected_point', $point_data);
+                error_log('CDEK AJAX: Сохранен ПВЗ в сессии: ' . $_POST['point_code']);
+            }
+            
+            // Сохраняем стоимость доставки
+            if (isset($_POST['delivery_cost']) && !empty($_POST['delivery_cost'])) {
+                $delivery_cost = floatval($_POST['delivery_cost']);
+                WC()->session->set('cdek_delivery_cost', $delivery_cost);
+                error_log('CDEK AJAX: Сохранена стоимость в сессии: ' . $delivery_cost);
+            }
+            
+            wp_send_json_success(array('message' => 'Данные сохранены в сессии'));
+            
+        } catch (Exception $e) {
+            error_log('CDEK AJAX: Ошибка сохранения в сессии: ' . $e->getMessage());
+            wp_send_json_error('Ошибка сохранения данных');
+        }
     }
     
     private function calculate_fallback_cost($weight, $value, $dimensions, $has_real_dimensions) {
@@ -494,8 +551,25 @@ class CdekDeliveryPlugin {
             }
             
             // ОТЛАДКА: Логируем получение данных СДЭК
-            error_log('CDEK DEBUG: Saving order data for order ID: ' . $order_id);
-            error_log('CDEK DEBUG: POST data: ' . print_r($_POST, true));
+            error_log('CDEK DEBUG: save_cdek_point_data вызван для заказа: ' . $order_id);
+            error_log('CDEK DEBUG: Данные $_POST: ' . print_r($_POST, true));
+            
+            // Дополнительная проверка сессии
+            if (isset($_SESSION['cdek_selected_point'])) {
+                error_log('CDEK DEBUG: Данные ПВЗ в сессии: ' . print_r($_SESSION['cdek_selected_point'], true));
+            }
+            
+            // Проверяем WooCommerce сессию
+            if (WC()->session) {
+                $session_point = WC()->session->get('cdek_selected_point');
+                $session_cost = WC()->session->get('cdek_delivery_cost');
+                if ($session_point) {
+                    error_log('CDEK DEBUG: ПВЗ в WC сессии: ' . print_r($session_point, true));
+                }
+                if ($session_cost) {
+                    error_log('CDEK DEBUG: Стоимость в WC сессии: ' . $session_cost);
+                }
+            }
         
         // Сохраняем код и данные пункта выдачи
         if (isset($_POST['cdek_selected_point_code']) && !empty($_POST['cdek_selected_point_code'])) {
@@ -530,9 +604,36 @@ class CdekDeliveryPlugin {
         if (isset($_POST['cdek_delivery_cost']) && !empty($_POST['cdek_delivery_cost'])) {
             $delivery_cost = floatval($_POST['cdek_delivery_cost']);
             update_post_meta($order_id, '_cdek_delivery_cost', $delivery_cost);
-            error_log('CDEK DEBUG: Saved delivery cost: ' . $delivery_cost);
+            error_log('CDEK DEBUG: Saved delivery cost from POST: ' . $delivery_cost);
         } else {
             error_log('CDEK DEBUG: No delivery cost in POST data');
+            
+            // Резервное сохранение из WooCommerce сессии
+            if (WC()->session) {
+                $session_cost = WC()->session->get('cdek_delivery_cost');
+                if ($session_cost && $session_cost > 0) {
+                    update_post_meta($order_id, '_cdek_delivery_cost', floatval($session_cost));
+                    error_log('CDEK DEBUG: Saved delivery cost from WC session: ' . $session_cost);
+                }
+            }
+        }
+        
+        // РЕЗЕРВНОЕ СОХРАНЕНИЕ: Если данные в POST отсутствуют, пытаемся получить из сессии
+        if ((!isset($_POST['cdek_selected_point_code']) || empty($_POST['cdek_selected_point_code'])) && WC()->session) {
+            $session_point = WC()->session->get('cdek_selected_point');
+            if ($session_point) {
+                error_log('CDEK DEBUG: Пытаемся сохранить данные из WC сессии');
+                
+                if (isset($session_point['code'])) {
+                    update_post_meta($order_id, '_cdek_point_code', sanitize_text_field($session_point['code']));
+                    error_log('CDEK DEBUG: Saved point code from session: ' . $session_point['code']);
+                }
+                
+                if (isset($session_point['data'])) {
+                    update_post_meta($order_id, '_cdek_point_data', $session_point['data']);
+                    error_log('CDEK DEBUG: Saved point data from session');
+                }
+            }
         }
         
         // НОВОЕ: Сохраняем детали товаров для отчетности
@@ -1002,44 +1103,78 @@ class CdekDeliveryPlugin {
     
     // НОВОЕ: Обновляем стоимость доставки в заказе
     public function update_order_shipping_cost($order_id) {
-        // Проверяем, есть ли стоимость доставки СДЭК
+        error_log('CDEK DEBUG: update_order_shipping_cost вызван для заказа: ' . $order_id);
+        
+        $delivery_cost = 0;
+        $point_data = null;
+        
+        // Пытаемся получить данные из POST
         if (isset($_POST['cdek_delivery_cost']) && !empty($_POST['cdek_delivery_cost'])) {
             $delivery_cost = floatval($_POST['cdek_delivery_cost']);
-            
-            if ($delivery_cost > 0) {
-                $order = wc_get_order($order_id);
-                
-                if ($order) {
-                    // Ищем метод доставки СДЭК в заказе
-                    $shipping_methods = $order->get_shipping_methods();
-                    
-                    foreach ($shipping_methods as $shipping_method) {
-                        if (strpos($shipping_method->get_method_id(), 'cdek_delivery') !== false) {
-                            // Обновляем стоимость доставки
-                            $shipping_method->set_total($delivery_cost);
-                            
-                            // Обновляем название метода доставки с выбранным пунктом
-                            if (isset($_POST['cdek_selected_point_data']) && !empty($_POST['cdek_selected_point_data'])) {
-                                $point_data = json_decode(stripslashes($_POST['cdek_selected_point_data']), true);
-                                if ($point_data && isset($point_data['name'])) {
-                                    $point_name = $point_data['name'];
-                                    $city = isset($point_data['location']['city']) ? $point_data['location']['city'] : '';
-                                    
-                                    $new_title = $city ? $city . ', ' . $point_name : $point_name;
-                                    $shipping_method->set_method_title($new_title);
-                                }
-                            }
-                            
-                            $shipping_method->save();
-                            break;
-                        }
-                    }
-                    
-                    // Пересчитываем общую стоимость заказа
-                    $order->calculate_totals();
-                    $order->save();
+            error_log('CDEK DEBUG: Стоимость из POST: ' . $delivery_cost);
+        }
+        
+        if (isset($_POST['cdek_selected_point_data']) && !empty($_POST['cdek_selected_point_data'])) {
+            $point_data = json_decode(stripslashes($_POST['cdek_selected_point_data']), true);
+            error_log('CDEK DEBUG: Данные ПВЗ из POST найдены');
+        }
+        
+        // Если в POST нет данных, пытаемся получить из сессии
+        if ((!$delivery_cost || !$point_data) && WC()->session) {
+            if (!$delivery_cost) {
+                $session_cost = WC()->session->get('cdek_delivery_cost');
+                if ($session_cost) {
+                    $delivery_cost = floatval($session_cost);
+                    error_log('CDEK DEBUG: Стоимость из WC сессии: ' . $delivery_cost);
                 }
             }
+            
+            if (!$point_data) {
+                $session_point = WC()->session->get('cdek_selected_point');
+                if ($session_point && isset($session_point['data'])) {
+                    $point_data = $session_point['data'];
+                    error_log('CDEK DEBUG: Данные ПВЗ из WC сессии найдены');
+                }
+            }
+        }
+        
+        // Если есть стоимость доставки, обновляем заказ
+        if ($delivery_cost > 0) {
+            error_log('CDEK DEBUG: Обновляем стоимость доставки в заказе: ' . $delivery_cost);
+            
+            $order = wc_get_order($order_id);
+            
+            if ($order) {
+                // Ищем метод доставки СДЭК в заказе
+                $shipping_methods = $order->get_shipping_methods();
+                
+                foreach ($shipping_methods as $shipping_method) {
+                    if (strpos($shipping_method->get_method_id(), 'cdek_delivery') !== false) {
+                        // Обновляем стоимость доставки
+                        $shipping_method->set_total($delivery_cost);
+                        
+                        // Обновляем название метода доставки с выбранным пунктом
+                        if ($point_data && isset($point_data['name'])) {
+                            $point_name = $point_data['name'];
+                            $city = isset($point_data['location']['city']) ? $point_data['location']['city'] : '';
+                            
+                            $new_title = $city ? $city . ', ' . $point_name : $point_name;
+                            $shipping_method->set_method_title($new_title);
+                            error_log('CDEK DEBUG: Обновлено название метода доставки: ' . $new_title);
+                        }
+                        
+                        $shipping_method->save();
+                        break;
+                    }
+                }
+                
+                // Пересчитываем общую стоимость заказа
+                $order->calculate_totals();
+                $order->save();
+                error_log('CDEK DEBUG: Заказ пересчитан и сохранен');
+            }
+        } else {
+            error_log('CDEK DEBUG: Стоимость доставки не найдена или равна 0');
         }
     }
 
