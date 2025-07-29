@@ -568,7 +568,7 @@ class CdekAPI {
         return $token;
     }
     
-    public function get_delivery_points($address, $city = '') {
+    public function get_delivery_points($address, $city = '', $weight = 0, $dimensions = array()) {
         // Подготавливаем название города для API
         $city_for_api = !empty($city) ? trim($city) : trim($address);
         
@@ -599,17 +599,29 @@ class CdekAPI {
             }
         }
         
-        // ИСПРАВЛЕНИЕ: Улучшенные параметры запроса согласно документации API v2
+        // ИСПРАВЛЕНИЕ: Минимальные ограничения для получения всех доступных ПВЗ
         $params = array(
-            'type' => 'PVZ', // ТОЛЬКО пункты выдачи заказов
+            'type' => 'PVZ', // Только пункты выдачи заказов
             'country_code' => 'RU', // Россия
-            'is_reception' => 'true', // Есть приём заказов
-            'have_cash' => 'true', // Принимает наличные
-            'have_cashless' => 'true', // Принимает безналичные
-            'allowed_cod' => 'true', // Разрешен наложенный платеж
-            'is_handout' => 'true', // Является пунктом выдачи
             'size' => '500' // Оптимальный лимит для быстрого поиска
         );
+        
+        // НОВОЕ: Добавляем ограничения по весу и габаритам если указаны
+        if ($weight > 0) {
+            $params['weight_max'] = max($weight, 30000); // Не меньше веса товара
+        }
+        
+        if (!empty($dimensions) && is_array($dimensions)) {
+            if (isset($dimensions['length']) && $dimensions['length'] > 0) {
+                $params['dimension_length'] = $dimensions['length'];
+            }
+            if (isset($dimensions['width']) && $dimensions['width'] > 0) {
+                $params['dimension_width'] = $dimensions['width'];
+            }
+            if (isset($dimensions['height']) && $dimensions['height'] > 0) {
+                $params['dimension_height'] = $dimensions['height'];
+            }
+        }
         
         // Добавляем фильтр по городу
         if ($city_code) {
@@ -669,6 +681,9 @@ class CdekAPI {
                 // ЛОГИРОВАНИЕ для конкретных городов
                 if (in_array(strtolower($city_for_api), ['курск', 'москва', 'тюмень'])) {
                     error_log('СДЭК API: 🎯 Отладка для города "' . $city_for_api . '": найдено ' . count($data) . ' ПВЗ');
+                    
+                    // ДИАГНОСТИКА: Сравниваем с полным списком
+                    $this->diagnose_pvz_count($city_for_api, $city_code, $token);
                     
                     // Проверяем наличие ПВЗ на "Зелинского" для Тюмени
                     if (strtolower($city_for_api) === 'тюмень') {
@@ -1134,5 +1149,72 @@ class CdekAPI {
         
         error_log('СДЭК API: Извлеченный город: ' . $city);
         return $city;
+    }
+    
+    // ДИАГНОСТИЧЕСКАЯ ФУНКЦИЯ: Сравнение количества ПВЗ с разными параметрами
+    public function diagnose_pvz_count($city_for_api, $city_code, $token) {
+        error_log('СДЭК API: 🔬 === ДИАГНОСТИКА ПВЗ ===');
+        
+        // Тест 1: Без ограничений
+        $params_minimal = array(
+            'type' => 'PVZ',
+            'country_code' => 'RU',
+            'size' => '500'
+        );
+        if ($city_code) {
+            $params_minimal['city_code'] = $city_code;
+        } else {
+            $params_minimal['city'] = $city_for_api;
+        }
+        
+        $url_minimal = 'https://api.cdek.ru/v2/deliverypoints?' . http_build_query($params_minimal);
+        $response_minimal = wp_remote_get($url_minimal, array(
+            'headers' => array('Authorization' => 'Bearer ' . $token),
+            'timeout' => 30
+        ));
+        
+        if (!is_wp_error($response_minimal)) {
+            $body_minimal = wp_remote_retrieve_body($response_minimal);
+            $data_minimal = json_decode($body_minimal, true);
+            $count_minimal = is_array($data_minimal) ? count($data_minimal) : 0;
+            error_log('СДЭК API: 📊 Без ограничений: ' . $count_minimal . ' ПВЗ');
+        }
+        
+        // Тест 2: С ограничениями (старые параметры)
+        $params_restricted = array(
+            'type' => 'PVZ',
+            'country_code' => 'RU',
+            'is_reception' => 'true',
+            'have_cash' => 'true', 
+            'have_cashless' => 'true',
+            'allowed_cod' => 'true',
+            'is_handout' => 'true',
+            'size' => '500'
+        );
+        if ($city_code) {
+            $params_restricted['city_code'] = $city_code;
+        } else {
+            $params_restricted['city'] = $city_for_api;
+        }
+        
+        $url_restricted = 'https://api.cdek.ru/v2/deliverypoints?' . http_build_query($params_restricted);
+        $response_restricted = wp_remote_get($url_restricted, array(
+            'headers' => array('Authorization' => 'Bearer ' . $token),
+            'timeout' => 30
+        ));
+        
+        if (!is_wp_error($response_restricted)) {
+            $body_restricted = wp_remote_retrieve_body($response_restricted);
+            $data_restricted = json_decode($body_restricted, true);
+            $count_restricted = is_array($data_restricted) ? count($data_restricted) : 0;
+            error_log('СДЭК API: 📊 С ограничениями: ' . $count_restricted . ' ПВЗ');
+            
+            $difference = $count_minimal - $count_restricted;
+            if ($difference > 0) {
+                error_log('СДЭК API: ⚠️ НАЙДЕНА ПРИЧИНА: Ограничения исключают ' . $difference . ' ПВЗ!');
+            }
+        }
+        
+        error_log('СДЭК API: 🔬 === КОНЕЦ ДИАГНОСТИКИ ===');
     }
 }
