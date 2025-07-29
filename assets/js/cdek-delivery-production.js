@@ -1196,45 +1196,65 @@ jQuery(document).ready(function($) {
     // ========== ОСТАЛЬНЫЕ ФУНКЦИИ (СОКРАЩЕННЫЕ) ==========
     
     function initYandexMap() {
-        if (cdekMap) return;
+        // ИСПРАВЛЕНИЕ: Добавляем дополнительные проверки и очистку
+        console.log('🗺️ Попытка инициализации карты. Текущее состояние cdekMap:', !!cdekMap);
+        
+        if (cdekMap) {
+            console.log('🗺️ Карта уже инициализирована, пропускаем');
+            return;
+        }
         
         if (typeof ymaps === 'undefined') {
+            console.log('🗺️ Яндекс.Карты не загружены, повторная попытка через 1 сек');
             setTimeout(initYandexMap, 1000);
             return;
         }
         
         var mapContainer = document.getElementById('cdek-map');
         if (!mapContainer) {
+            console.log('🗺️ Контейнер карты не найден, повторная попытка через 0.5 сек');
             setTimeout(initYandexMap, 500);
             return;
         }
         
+        // ИСПРАВЛЕНИЕ: Принудительно делаем контейнер видимым
         mapContainer.style.cssText = 'display: block !important; width: 100% !important; height: 450px !important; visibility: visible !important; position: relative !important;';
         
-        var checkContainer = function() {
+        // Ждем, пока контейнер получит размеры
+        var attempts = 0;
+        var checkSize = function() {
+            attempts++;
             if (mapContainer.offsetWidth > 0 && mapContainer.offsetHeight > 0) {
+                console.log('🗺️ Контейнер готов, размеры:', mapContainer.offsetWidth, 'x', mapContainer.offsetHeight);
                 try {
                     cdekMap = new ymaps.Map(mapContainer, {
-                        center: [55.753994, 37.622093],
+                        center: [55.76, 37.64], // Центр Москвы по умолчанию
                         zoom: 10,
-                        controls: ['zoomControl', 'searchControl']
+                        controls: ['zoomControl', 'fullscreenControl', 'geolocationControl']
                     });
-                
-                    if (cdekPoints && cdekPoints.length > 0) {
-                        displayCdekPoints(cdekPoints);
-                    }
+                    
+                    console.log('✅ Яндекс.Карта успешно инициализирована');
+                    
+                    // Добавляем обработчик готовности карты
+                    cdekMap.events.add('ready', function() {
+                        console.log('✅ Карта готова к использованию');
+                    });
+                    
                 } catch (error) {
-                    setTimeout(function() {
-                        cdekMap = null;
-                        initYandexMap();
-                    }, 1000);
+                    console.error('❌ Ошибка инициализации карты:', error);
+                    cdekMap = null;
+                    // Попробуем еще раз через секунду
+                    setTimeout(initYandexMap, 1000);
                 }
+            } else if (attempts < 10) {
+                console.log('🗺️ Ожидаем размеры контейнера, попытка', attempts);
+                setTimeout(checkSize, 100);
             } else {
-                setTimeout(checkContainer, 300);
+                console.error('❌ Не удалось получить размеры контейнера карты после 10 попыток');
             }
         };
         
-        setTimeout(checkContainer, 200);
+        checkSize();
     }
     
     function geocodeAddress(address, callback) {
@@ -2039,10 +2059,28 @@ jQuery(document).ready(function($) {
                         debouncer.debounce('init-cdek-delivery', () => initCdekDelivery(), 200, 8);
                     } else {
                         mapContainer.show();
-                        // Убеждаемся что карта инициализирована
-                        if (!cdekMap && typeof ymaps !== 'undefined') {
-                            setTimeout(() => initYandexMap(), 500);
-                        }
+                        // ИСПРАВЛЕНИЕ: Принудительная реинициализация карты
+                        setTimeout(() => {
+                            console.log('🗺️ Проверяем состояние карты. cdekMap:', !!cdekMap, 'ymaps доступен:', typeof ymaps !== 'undefined');
+                            
+                            if (!cdekMap && typeof ymaps !== 'undefined') {
+                                console.log('🔄 Карта не инициализирована, запускаем инициализацию');
+                                initYandexMap();
+                            } else if (cdekMap && typeof cdekMap.container !== 'undefined') {
+                                // Проверяем, отображается ли карта корректно
+                                var mapElement = document.getElementById('cdek-map');
+                                if (mapElement && mapElement.offsetWidth === 0) {
+                                    console.log('🔄 Карта скрыта, перерисовываем');
+                                    cdekMap.container.fitToViewport();
+                                }
+                            }
+                            
+                            // Если есть сохранённые ПВЗ, отображаем их снова
+                            if (cdekPoints && cdekPoints.length > 0) {
+                                console.log('📍 Восстанавливаем ' + cdekPoints.length + ' ПВЗ на карте');
+                                displayCdekPoints(cdekPoints);
+                            }
+                        }, 500);
                     }
                 } else if (title === 'Самовывоз') {
                     console.log('🙈 Выбран "Самовывоз" - скрываем карту CDEK');
@@ -2078,9 +2116,34 @@ jQuery(document).ready(function($) {
                         if (title === 'Доставка') {
                             console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
                             if (mapContainer.length === 0) {
-                                                                 debouncer.debounce('init-cdek-aria', () => initCdekDelivery(), 200, 8);
+                                debouncer.debounce('init-cdek-aria', () => initCdekDelivery(), 200, 8);
                             } else {
                                 mapContainer.show();
+                                // ИСПРАВЛЕНИЕ: Улучшенная реинициализация карты через MutationObserver
+                                setTimeout(() => {
+                                    console.log('🗺️ MutationObserver: Проверяем карту');
+                                    
+                                    // Сброс карты если она "сломана"
+                                    var mapElement = document.getElementById('cdek-map');
+                                    if (mapElement && (!cdekMap || mapElement.offsetWidth === 0)) {
+                                        console.log('🔄 MutationObserver: Сбрасываем карту');
+                                        cdekMap = null;
+                                        
+                                        if (typeof ymaps !== 'undefined') {
+                                            initYandexMap();
+                                        }
+                                    }
+                                    
+                                    // Восстанавливаем ПВЗ после реинициализации
+                                    if (cdekPoints && cdekPoints.length > 0) {
+                                        setTimeout(() => {
+                                            if (cdekMap) {
+                                                console.log('📍 MutationObserver: Восстанавливаем ПВЗ');
+                                                displayCdekPoints(cdekPoints);
+                                            }
+                                        }, 500);
+                                    }
+                                }, 300);
                             }
                         } else {
                             console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
