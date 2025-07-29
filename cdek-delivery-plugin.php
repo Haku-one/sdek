@@ -962,14 +962,14 @@ class CdekAPI {
             return array();
         }
         
-        // НОВАЯ ЛОГИКА: Пробуем разные стратегии поиска
+        // ИСПРАВЛЕННАЯ ЛОГИКА: Только точный поиск без широкого поиска
         $search_strategies = array(
             // Стратегия 1: Точный поиск с city_code
-            array('use_city_code' => true, 'description' => 'поиск с city_code'),
-            // Стратегия 2: Поиск по названию города без city_code
-            array('use_city_code' => false, 'description' => 'поиск по названию города'),
-            // Стратегия 3: Широкий поиск по региону
-            array('use_city_code' => false, 'broad_search' => true, 'description' => 'широкий поиск по региону')
+            array('use_city_code' => true, 'description' => 'точный поиск с city_code'),
+            // Стратегия 2: Поиск по названию города с точным совпадением
+            array('use_city_code' => false, 'exact_city' => true, 'description' => 'точный поиск по названию города'),
+            // Стратегия 3: Поиск по названию города с дополнительными вариантами
+            array('use_city_code' => false, 'fuzzy_city' => true, 'description' => 'поиск с вариантами названия')
         );
         
         foreach ($search_strategies as $index => $strategy) {
@@ -999,7 +999,7 @@ class CdekAPI {
             $params = array(
                 'type' => 'PVZ',
                 'country_code' => 'RU',
-                'size' => isset($strategy['broad_search']) ? '200' : '100'
+                'size' => '50' // Разумный лимит для всех стратегий
             );
             
             // Добавляем ограничения по весу и габаритам если указаны
@@ -1019,16 +1019,24 @@ class CdekAPI {
                 }
             }
             
-            // Добавляем фильтр по городу
+            // ИСПРАВЛЕННЫЙ фильтр по городу - ВСЕГДА используем фильтр
             if ($city_code) {
                 $params['city_code'] = $city_code;
                 error_log('СДЭК API: ✅ Используем city_code: ' . $city_code);
-            } else if (!isset($strategy['broad_search'])) {
-                $params['city'] = $city_for_api;
-                error_log('СДЭК API: 🔍 Используем название города: ' . $city_for_api);
             } else {
-                // Для широкого поиска ничего не добавляем
-                error_log('СДЭК API: 🌐 Широкий поиск без ограничений');
+                // ВСЕГДА добавляем название города для фильтрации
+                if (isset($strategy['exact_city'])) {
+                    $params['city'] = $city_for_api;
+                    error_log('СДЭК API: 🎯 Точный поиск по городу: ' . $city_for_api);
+                } else if (isset($strategy['fuzzy_city'])) {
+                    // Пробуем разные варианты названия города
+                    $city_variants = $this->getCityVariants($city_for_api);
+                    $params['city'] = $city_variants[0]; // Берем первый вариант
+                    error_log('СДЭК API: 🔍 Поиск с вариантами: ' . $params['city']);
+                } else {
+                    $params['city'] = $city_for_api;
+                    error_log('СДЭК API: 🔍 Обычный поиск по городу: ' . $city_for_api);
+                }
             }
             
             // Строим URL с параметрами
@@ -1057,23 +1065,26 @@ class CdekAPI {
                 if (is_array($data) && !empty($data)) {
                     error_log('СДЭК API: ✅ Стратегия ' . ($index + 1) . ' успешна: найдено ' . count($data) . ' ПВЗ');
                     
-                    // Дополнительная фильтрация для широкого поиска
-                    if (isset($strategy['broad_search']) && !empty($city_for_api)) {
+                    // ИСПРАВЛЕННАЯ фильтрация - строгая проверка соответствия городу
+                    if (!empty($city_for_api)) {
                         $filtered_data = array_filter($data, function($point) use ($city_for_api) {
                             if (isset($point['location']['city'])) {
-                                $point_city = strtolower($point['location']['city']);
-                                $search_city = strtolower($city_for_api);
-                                return strpos($point_city, $search_city) !== false || 
-                                       strpos($search_city, $point_city) !== false;
+                                $point_city = strtolower(trim($point['location']['city']));
+                                $search_city = strtolower(trim($city_for_api));
+                                
+                                // СТРОГОЕ соответствие - точное совпадение или город содержится в названии
+                                return $point_city === $search_city || 
+                                       strpos($point_city, $search_city) === 0 ||  // город начинается с искомого
+                                       strpos($search_city, $point_city) === 0;    // искомый начинается с города
                             }
                             return false;
                         });
                         
                         if (count($filtered_data) > 0) {
-                            error_log('СДЭК API: После фильтрации широкого поиска: ' . count($filtered_data) . ' ПВЗ');
+                            error_log('СДЭК API: После строгой фильтрации: ' . count($filtered_data) . ' ПВЗ для города "' . $city_for_api . '"');
                             $data = array_values($filtered_data);
                         } else {
-                            error_log('СДЭК API: Широкий поиск не дал результатов для города: ' . $city_for_api);
+                            error_log('СДЭК API: Строгая фильтрация не дала результатов для города: ' . $city_for_api);
                             continue;
                         }
                     }
@@ -1111,6 +1122,35 @@ class CdekAPI {
         
         error_log('СДЭК API: ❌ Все стратегии поиска исчерпаны для города: ' . $city_for_api);
         return array();
+    }
+    
+    /**
+     * Получить варианты названия города для поиска
+     */
+    private function getCityVariants($city_name) {
+        $variants = array();
+        $city_clean = trim($city_name);
+        
+        // Основное название
+        $variants[] = $city_clean;
+        
+        // Без префиксов
+        $clean_no_prefix = preg_replace('/^(г\.|город|г\s)/i', '', $city_clean);
+        if ($clean_no_prefix !== $city_clean) {
+            $variants[] = trim($clean_no_prefix);
+        }
+        
+        // С префиксом "г."
+        if (!preg_match('/^г\./i', $city_clean)) {
+            $variants[] = 'г. ' . $city_clean;
+        }
+        
+        // Разные регистры
+        $variants[] = ucfirst(strtolower($city_clean));
+        $variants[] = mb_strtoupper($city_clean);
+        
+        // Убираем дубликаты
+        return array_unique($variants);
     }
     
     /**
