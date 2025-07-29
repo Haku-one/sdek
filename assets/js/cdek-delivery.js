@@ -708,32 +708,94 @@ jQuery(document).ready(function($) {
     
     // ========== ФУНКЦИИ ДЛЯ РАСЧЕТА СТОИМОСТИ ДОСТАВКИ ==========
     
-    function calculateDeliveryCost(point) {
-        if (!point || !point.code) {
-            console.error('❌ Некорректные данные пункта для расчета стоимости');
+    function calculateDeliveryCost(point, callback) {
+        var cartData = getCartDataForCalculation();
+        
+        if (typeof cdek_ajax === 'undefined' || !cdek_ajax.ajax_url) {
+            console.error('CDEK AJAX не инициализирован');
+            if (callback) callback(calculateFallbackCost(point, cartData));
             return;
         }
         
-        console.log('💰 Расчет стоимости доставки для пункта:', point.code);
-        
-        // Здесь должен быть AJAX запрос к серверу для расчета стоимости
-        // Пока что выводим информацию в консоль
-        var pointType = 'ПВЗ';
-        if (point.type && (point.type.toLowerCase().includes('postamat') || point.type.toLowerCase().includes('постамат'))) {
-            pointType = 'Постамат';
-        } else if (point.name && point.name.toLowerCase().includes('постамат')) {
-            pointType = 'Постамат';
+        if (!point || !point.code) {
+            console.error('Не указан пункт выдачи или его код');
+            if (callback) callback(calculateFallbackCost(point, cartData));
+            return;
         }
         
-        console.log('📦 Выбран тип доставки:', pointType);
-        console.log('📍 Адрес пункта:', point.location?.address);
-        console.log('🕒 Режим работы:', point.work_time || 'Не указан');
+        console.log('💰 Запрос расчета стоимости доставки для пункта:', point.code);
+        console.log('📦 Данные корзины:', cartData);
         
-        // Обновляем отображение информации о доставке
-        var pointsCount = $('#cdek-points-count');
-        if (pointsCount.length) {
-            pointsCount.html(`✅ Выбран ${pointType}: <strong>${point.name}</strong><br>Адрес: ${point.location?.address || 'Не указан'}`);
-        }
+        $.ajax({
+            url: cdek_ajax.ajax_url,
+            type: 'POST',
+            dataType: 'json',
+            timeout: 30000,
+            data: {
+                action: 'calculate_cdek_delivery_cost',
+                point_code: point.code,
+                point_data: JSON.stringify(point),
+                cart_weight: cartData.weight,
+                cart_dimensions: JSON.stringify(cartData.dimensions),
+                cart_value: cartData.value,
+                has_real_dimensions: cartData.hasRealDimensions ? 1 : 0,
+                packages_count: cartData.packagesCount || 1,
+                nonce: cdek_ajax.nonce || ''
+            },
+            success: function(response) {
+                console.log('✅ Ответ API расчета стоимости:', response);
+                
+                if (response && response.success && response.data && response.data.delivery_sum) {
+                    var deliveryCost = parseInt(response.data.delivery_sum);
+                    
+                    if (cartData.packagesCount > 1) {
+                        var costPerPackage = deliveryCost;
+                        deliveryCost = deliveryCost * cartData.packagesCount;
+                        console.log('📦 Стоимость пересчитана для', cartData.packagesCount, 'коробок:', costPerPackage, '×', cartData.packagesCount, '=', deliveryCost, 'руб.');
+                    }
+                    
+                    if (response.data.fallback) {
+                        console.warn('⚠️ Используется резервный расчет:', deliveryCost, 'руб.');
+                        console.log('Причина:', response.data.message);
+                    } else if (response.data.api_success) {
+                        console.log('✅ Успешно получена стоимость из настоящего API СДЭК:', deliveryCost, 'руб.');
+                        if (response.data.alternative_tariff) {
+                            console.log('Использован альтернативный тариф:', response.data.alternative_tariff);
+                        }
+                    } else {
+                        console.log('💰 Получена стоимость доставки:', deliveryCost, 'руб.');
+                    }
+                    
+                    if (callback) callback(deliveryCost);
+                } else if (!response.success) {
+                    console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    
+                    // Используем fallback вместо показа ошибки пользователю
+                    var fallbackCost = calculateFallbackCost(point, cartData);
+                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    if (callback) callback(fallbackCost);
+                } else {
+                    console.error('❌ API СДЭК вернул некорректный ответ');
+                    
+                    var fallbackCost = calculateFallbackCost(point, cartData);
+                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    if (callback) callback(fallbackCost);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Критическая ошибка запроса к API СДЭК:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText,
+                    readyState: xhr.readyState
+                });
+                
+                // Используем fallback вместо показа ошибки
+                var fallbackCost = calculateFallbackCost(point, cartData);
+                console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                if (callback) callback(fallbackCost);
+            }
+        });
     }
     
     function calculateFallbackCost(point, cartData) {
@@ -1480,11 +1542,15 @@ jQuery(document).ready(function($) {
                         (point.note ? '<p><strong>Примечание:</strong> ' + point.note + '</p>' : '') +
                         (point.phone ? '<p><strong>Телефон:</strong> ' + point.phone + '</p>' : '') +
                         '</div>',
-                    balloonContentFooter: '<button onclick="selectCdekPoint(' + index + ')" style="background: ' + iconColor + '; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Выбрать этот ' + pointType.toLowerCase() + '</button>',
                     hintContent: pointType + ': ' + (point.name || point.location.address)
                 }, {
                     preset: iconPreset,
                     iconColor: iconColor
+                });
+                
+                // ИСПРАВЛЕНИЕ: Возвращаем старую логику - клик по маркеру сразу выбирает ПВЗ
+                placemark.events.add('click', function() {
+                    selectCdekPoint(point);
                 });
                 
                 cdekMap.geoObjects.add(placemark);
@@ -1524,23 +1590,12 @@ jQuery(document).ready(function($) {
     
     // ========== ФУНКЦИИ ВЫБОРА ПУНКТА ==========
     
-    window.selectCdekPoint = function(pointIndexOrData) {
-        var point;
-        
-        // Поддерживаем как старый формат (объект), так и новый (индекс)
-        if (typeof pointIndexOrData === 'number') {
-            if (cdekPoints && cdekPoints[pointIndexOrData]) {
-                point = cdekPoints[pointIndexOrData];
-            } else {
-                console.error('❌ Не найден пункт с индексом:', pointIndexOrData);
-                return;
-            }
-        } else {
-            point = pointIndexOrData;
-        }
-        
+    window.selectCdekPoint = function(point) {
         // Сохраняем выбранный пункт
         selectedCdekPoint = point;
+        
+        // Запоминаем выбранный ПВЗ чтобы избежать повторных поисков
+        window.lastSelectedPointCode = point.code;
         
         // Определяем тип точки
         var pointType = 'ПВЗ';
@@ -1553,33 +1608,41 @@ jQuery(document).ready(function($) {
         console.log('✅ Выбран ' + pointType + ':', point.name, '(код:', point.code + ')');
         
         // Показываем информацию о выбранном пункте
-        var selectedInfo = $('#cdek-selected-point');
-        var pointInfo = $('#cdek-point-info');
-        
-        if (selectedInfo.length && pointInfo.length) {
-            var infoHtml = '<div style="font-size: 14px;">';
-            infoHtml += '<p><strong>' + pointType + ':</strong> ' + (point.name || 'Без названия') + '</p>';
-            infoHtml += '<p><strong>Код:</strong> ' + (point.code || 'N/A') + '</p>';
-            infoHtml += '<p><strong>Адрес:</strong> ' + (point.location?.address || 'Адрес не указан') + '</p>';
-            if (point.work_time) {
-                infoHtml += '<p><strong>Режим работы:</strong> ' + point.work_time + '</p>';
-            }
-            if (point.phone) {
-                infoHtml += '<p><strong>Телефон:</strong> ' + point.phone + '</p>';
-            }
-            infoHtml += '</div>';
-            
-            pointInfo.html(infoHtml);
-            selectedInfo.show();
-        }
+        $('#cdek-point-info').html(formatPointInfo(point));
+        $('#cdek-selected-point').show();
         
         // Центрируем карту на выбранном пункте
         if (cdekMap && point.location) {
             cdekMap.setCenter([point.location.latitude, point.location.longitude], 15);
         }
         
-        // Рассчитываем стоимость доставки
-        calculateDeliveryCost(point);
+        // Создаем или обновляем скрытые поля для отправки данных
+        if ($('#cdek-selected-point-code').length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-selected-point-code',
+                name: 'cdek_selected_point_code',
+                value: point.code
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            $('#cdek-selected-point-code').val(point.code);
+        }
+        
+        if ($('#cdek-selected-point-data').length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-selected-point-data',
+                name: 'cdek_selected_point_data',
+                value: JSON.stringify(point)
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            $('#cdek-selected-point-data').val(JSON.stringify(point));
+        }
+        
+        // Обновляем информацию о заказе и рассчитываем стоимость
+        updateOrderSummary(point);
+        
+        console.log('✅ Выбран ' + pointType + ':', point.name, '(код:', point.code + ')');
     };
     
     function clearSelectedPoint() {

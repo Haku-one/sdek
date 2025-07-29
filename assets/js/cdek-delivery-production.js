@@ -708,32 +708,94 @@ jQuery(document).ready(function($) {
     
     // ========== ФУНКЦИИ ДЛЯ РАСЧЕТА СТОИМОСТИ ДОСТАВКИ ==========
     
-    function calculateDeliveryCost(point) {
-        if (!point || !point.code) {
-            console.error('❌ Некорректные данные пункта для расчета стоимости');
+    function calculateDeliveryCost(point, callback) {
+        var cartData = getCartDataForCalculation();
+        
+        if (typeof cdek_ajax === 'undefined' || !cdek_ajax.ajax_url) {
+            console.error('CDEK AJAX не инициализирован');
+            if (callback) callback(calculateFallbackCost(point, cartData));
             return;
         }
         
-        console.log('💰 Расчет стоимости доставки для пункта:', point.code);
-        
-        // Здесь должен быть AJAX запрос к серверу для расчета стоимости
-        // Пока что выводим информацию в консоль
-        var pointType = 'ПВЗ';
-        if (point.type && (point.type.toLowerCase().includes('postamat') || point.type.toLowerCase().includes('постамат'))) {
-            pointType = 'Постамат';
-        } else if (point.name && point.name.toLowerCase().includes('постамат')) {
-            pointType = 'Постамат';
+        if (!point || !point.code) {
+            console.error('Не указан пункт выдачи или его код');
+            if (callback) callback(calculateFallbackCost(point, cartData));
+            return;
         }
         
-        console.log('📦 Выбран тип доставки:', pointType);
-        console.log('📍 Адрес пункта:', point.location?.address);
-        console.log('🕒 Режим работы:', point.work_time || 'Не указан');
+        console.log('💰 Запрос расчета стоимости доставки для пункта:', point.code);
+        console.log('📦 Данные корзины:', cartData);
         
-        // Обновляем отображение информации о доставке
-        var pointsCount = $('#cdek-points-count');
-        if (pointsCount.length) {
-            pointsCount.html(`✅ Выбран ${pointType}: <strong>${point.name}</strong><br>Адрес: ${point.location?.address || 'Не указан'}`);
-        }
+        $.ajax({
+            url: cdek_ajax.ajax_url,
+            type: 'POST',
+            dataType: 'json',
+            timeout: 30000,
+            data: {
+                action: 'calculate_cdek_delivery_cost',
+                point_code: point.code,
+                point_data: JSON.stringify(point),
+                cart_weight: cartData.weight,
+                cart_dimensions: JSON.stringify(cartData.dimensions),
+                cart_value: cartData.value,
+                has_real_dimensions: cartData.hasRealDimensions ? 1 : 0,
+                packages_count: cartData.packagesCount || 1,
+                nonce: cdek_ajax.nonce || ''
+            },
+            success: function(response) {
+                console.log('✅ Ответ API расчета стоимости:', response);
+                
+                if (response && response.success && response.data && response.data.delivery_sum) {
+                    var deliveryCost = parseInt(response.data.delivery_sum);
+                    
+                    if (cartData.packagesCount > 1) {
+                        var costPerPackage = deliveryCost;
+                        deliveryCost = deliveryCost * cartData.packagesCount;
+                        console.log('📦 Стоимость пересчитана для', cartData.packagesCount, 'коробок:', costPerPackage, '×', cartData.packagesCount, '=', deliveryCost, 'руб.');
+                    }
+                    
+                    if (response.data.fallback) {
+                        console.warn('⚠️ Используется резервный расчет:', deliveryCost, 'руб.');
+                        console.log('Причина:', response.data.message);
+                    } else if (response.data.api_success) {
+                        console.log('✅ Успешно получена стоимость из настоящего API СДЭК:', deliveryCost, 'руб.');
+                        if (response.data.alternative_tariff) {
+                            console.log('Использован альтернативный тариф:', response.data.alternative_tariff);
+                        }
+                    } else {
+                        console.log('💰 Получена стоимость доставки:', deliveryCost, 'руб.');
+                    }
+                    
+                    if (callback) callback(deliveryCost);
+                } else if (!response.success) {
+                    console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    
+                    // Используем fallback вместо показа ошибки пользователю
+                    var fallbackCost = calculateFallbackCost(point, cartData);
+                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    if (callback) callback(fallbackCost);
+                } else {
+                    console.error('❌ API СДЭК вернул некорректный ответ');
+                    
+                    var fallbackCost = calculateFallbackCost(point, cartData);
+                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    if (callback) callback(fallbackCost);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Критическая ошибка запроса к API СДЭК:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText,
+                    readyState: xhr.readyState
+                });
+                
+                // Используем fallback вместо показа ошибки
+                var fallbackCost = calculateFallbackCost(point, cartData);
+                console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                if (callback) callback(fallbackCost);
+            }
+        });
     }
     
     function calculateFallbackCost(point, cartData) {
@@ -1480,11 +1542,15 @@ jQuery(document).ready(function($) {
                         (point.note ? '<p><strong>Примечание:</strong> ' + point.note + '</p>' : '') +
                         (point.phone ? '<p><strong>Телефон:</strong> ' + point.phone + '</p>' : '') +
                         '</div>',
-                    balloonContentFooter: '<button onclick="selectCdekPoint(' + index + ')" style="background: ' + iconColor + '; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Выбрать этот ' + pointType.toLowerCase() + '</button>',
                     hintContent: pointType + ': ' + (point.name || point.location.address)
                 }, {
                     preset: iconPreset,
                     iconColor: iconColor
+                });
+                
+                // ИСПРАВЛЕНИЕ: Возвращаем старую логику - клик по маркеру сразу выбирает ПВЗ
+                placemark.events.add('click', function() {
+                    selectCdekPoint(point);
                 });
                 
                 cdekMap.geoObjects.add(placemark);
@@ -1524,23 +1590,12 @@ jQuery(document).ready(function($) {
     
     // ========== ФУНКЦИИ ВЫБОРА ПУНКТА ==========
     
-    window.selectCdekPoint = function(pointIndexOrData) {
-        var point;
-        
-        // Поддерживаем как старый формат (объект), так и новый (индекс)
-        if (typeof pointIndexOrData === 'number') {
-            if (cdekPoints && cdekPoints[pointIndexOrData]) {
-                point = cdekPoints[pointIndexOrData];
-            } else {
-                console.error('❌ Не найден пункт с индексом:', pointIndexOrData);
-                return;
-            }
-        } else {
-            point = pointIndexOrData;
-        }
-        
+    window.selectCdekPoint = function(point) {
         // Сохраняем выбранный пункт
         selectedCdekPoint = point;
+        
+        // Запоминаем выбранный ПВЗ чтобы избежать повторных поисков
+        window.lastSelectedPointCode = point.code;
         
         // Определяем тип точки
         var pointType = 'ПВЗ';
@@ -1553,33 +1608,41 @@ jQuery(document).ready(function($) {
         console.log('✅ Выбран ' + pointType + ':', point.name, '(код:', point.code + ')');
         
         // Показываем информацию о выбранном пункте
-        var selectedInfo = $('#cdek-selected-point');
-        var pointInfo = $('#cdek-point-info');
-        
-        if (selectedInfo.length && pointInfo.length) {
-            var infoHtml = '<div style="font-size: 14px;">';
-            infoHtml += '<p><strong>' + pointType + ':</strong> ' + (point.name || 'Без названия') + '</p>';
-            infoHtml += '<p><strong>Код:</strong> ' + (point.code || 'N/A') + '</p>';
-            infoHtml += '<p><strong>Адрес:</strong> ' + (point.location?.address || 'Адрес не указан') + '</p>';
-            if (point.work_time) {
-                infoHtml += '<p><strong>Режим работы:</strong> ' + point.work_time + '</p>';
-            }
-            if (point.phone) {
-                infoHtml += '<p><strong>Телефон:</strong> ' + point.phone + '</p>';
-            }
-            infoHtml += '</div>';
-            
-            pointInfo.html(infoHtml);
-            selectedInfo.show();
-        }
+        $('#cdek-point-info').html(formatPointInfo(point));
+        $('#cdek-selected-point').show();
         
         // Центрируем карту на выбранном пункте
         if (cdekMap && point.location) {
             cdekMap.setCenter([point.location.latitude, point.location.longitude], 15);
         }
         
-        // Рассчитываем стоимость доставки
-        calculateDeliveryCost(point);
+        // Создаем или обновляем скрытые поля для отправки данных
+        if ($('#cdek-selected-point-code').length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-selected-point-code',
+                name: 'cdek_selected_point_code',
+                value: point.code
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            $('#cdek-selected-point-code').val(point.code);
+        }
+        
+        if ($('#cdek-selected-point-data').length === 0) {
+            $('<input>').attr({
+                type: 'hidden',
+                id: 'cdek-selected-point-data',
+                name: 'cdek_selected_point_data',
+                value: JSON.stringify(point)
+            }).appendTo('form.checkout, form.woocommerce-checkout');
+        } else {
+            $('#cdek-selected-point-data').val(JSON.stringify(point));
+        }
+        
+        // Обновляем информацию о заказе и рассчитываем стоимость
+        updateOrderSummary(point);
+        
+        console.log('✅ Выбран ' + pointType + ':', point.name, '(код:', point.code + ')');
     };
     
     function clearSelectedPoint() {
@@ -2119,133 +2182,62 @@ jQuery(document).ready(function($) {
     
     // Обработчик для блоков WooCommerce (новая система оформления)
     $(document).on('click', '.wc-block-checkout__shipping-method-option', function() {
-        var $clickedOption = $(this);
-        var titleElement = $clickedOption.find('.wc-block-checkout__shipping-method-option-title');
-        var title = titleElement.text().trim();
+        var methodTitle = $(this).find('.wc-block-checkout__shipping-method-option-title').text().trim();
+        console.log('🔄 Клик по способу доставки:', methodTitle);
         
-        console.log('🔄 Клик по способу доставки:', title);
-        
-        // Немедленно проверяем состояние после клика
         setTimeout(() => {
-            var isSelected = $clickedOption.attr('aria-checked') === 'true' || 
-                           $clickedOption.hasClass('wc-block-checkout__shipping-method-option--selected');
+            var isSelected = $(this).attr('aria-checked') === 'true';
+            console.log('🔄 Состояние после клика - Способ:', methodTitle, 'Выбран:', isSelected);
             
-            console.log('🔄 Состояние после клика - Способ:', title, 'Выбран:', isSelected);
-            
-            var mapContainer = $('#cdek-map-container');
-            
-            if (isSelected) {
-                if (title === 'Доставка') {
-                    console.log('✅ Выбрана "Доставка" - показываем карту CDEK');
-                    if (mapContainer.length === 0) {
-                        debouncer.debounce('init-cdek-delivery', () => initCdekDelivery(), 200, 8);
-                    } else {
-                        mapContainer.show();
-                        // ИСПРАВЛЕНИЕ: Принудительная реинициализация карты
-                        setTimeout(() => {
-                            console.log('🗺️ Проверяем состояние карты. cdekMap:', !!cdekMap, 'ymaps доступен:', typeof ymaps !== 'undefined');
-                            
-                            if (!cdekMap && typeof ymaps !== 'undefined') {
-                                console.log('🔄 Карта не инициализирована, запускаем инициализацию');
-                                initYandexMap();
-                            } else if (cdekMap && typeof cdekMap.container !== 'undefined') {
-                                // Проверяем, отображается ли карта корректно
-                                var mapElement = document.getElementById('cdek-map');
-                                if (mapElement && mapElement.offsetWidth === 0) {
-                                    console.log('🔄 Карта скрыта, перерисовываем');
-                                    cdekMap.container.fitToViewport();
-                                }
-                            }
-                            
-                            // Если есть сохранённые ПВЗ, отображаем их снова
-                            if (cdekPoints && cdekPoints.length > 0) {
-                                console.log('📍 Восстанавливаем ' + cdekPoints.length + ' ПВЗ на карте');
+            if (methodTitle === 'Доставка' && isSelected) {
+                console.log('✅ Выбрана "Доставка" - показываем карту CDEK');
+                
+                // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
+                var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                if (mapBlock.length > 0) {
+                    mapBlock.show();
+                    mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
+                    console.log('🔧 Принудительно показан блок wp-block-cdek-checkout-map-block');
+                }
+                
+                // Проверяем состояние карты и переинициализируем если нужно
+                setTimeout(() => {
+                    var mapElement = document.getElementById('cdek-map');
+                    if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
+                        console.log('🔄 Карта не видна, переинициализируем...');
+                        cdekMap = null;
+                        initYandexMap();
+                        
+                        // Восстанавливаем ПВЗ если они есть
+                        if (cdekPoints && cdekPoints.length > 0) {
+                            setTimeout(() => {
+                                console.log('📍 Восстанавливаем ПВЗ на карте');
                                 displayCdekPoints(cdekPoints);
-                            }
-                        }, 500);
+                            }, 1000);
+                        }
+                    } else {
+                        console.log('✅ Карта уже видна и готова');
+                        // Просто показываем существующую карту
+                        if (mapElement) {
+                            mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
+                        }
                     }
-                } else if (title === 'Самовывоз') {
-                    console.log('🙈 Выбран "Самовывоз" - скрываем карту CDEK');
-                    if (mapContainer.length > 0) {
-                        mapContainer.hide();
-                        resetCdekShippingToDefault();
-                    }
-                } else if (title === 'Обсудить доставку с менеджером') {
-                    console.log('💬 Выбрано "Обсудить с менеджером" - скрываем карту CDEK');
-                    if (mapContainer.length > 0) {
-                        mapContainer.hide();
-                        resetCdekShippingToDefault();
-                    }
+                }, 200);
+                
+            } else if (methodTitle === 'Самовывоз' && isSelected) {
+                console.log('🙈 Выбран "Самовывоз" - скрываем карту CDEK');
+                
+                // Скрываем блок карты
+                var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                if (mapBlock.length > 0) {
+                    mapBlock.hide();
+                    console.log('🔧 Скрыт блок wp-block-cdek-checkout-map-block');
                 }
             }
         }, 100);
     });
     
-    // Дополнительный обработчик через MutationObserver для отслеживания изменений aria-checked
-    var tabObserver = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
-                var $target = $(mutation.target);
-                if ($target.hasClass('wc-block-checkout__shipping-method-option')) {
-                    var title = $target.find('.wc-block-checkout__shipping-method-option-title').text().trim();
-                    var isSelected = $target.attr('aria-checked') === 'true';
-                    
-                    console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
-                    
-                    if (isSelected) {
-                        var mapContainer = $('#cdek-map-container');
-                        
-                        if (title === 'Доставка') {
-                            console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
-                            if (mapContainer.length === 0) {
-                                debouncer.debounce('init-cdek-aria', () => initCdekDelivery(), 200, 8);
-                            } else {
-                                mapContainer.show();
-                                // ИСПРАВЛЕНИЕ: Улучшенная реинициализация карты через MutationObserver
-                                setTimeout(() => {
-                                    console.log('🗺️ MutationObserver: Проверяем карту');
-                                    
-                                    // Сброс карты если она "сломана"
-                                    var mapElement = document.getElementById('cdek-map');
-                                    if (mapElement && (!cdekMap || mapElement.offsetWidth === 0)) {
-                                        console.log('🔄 MutationObserver: Сбрасываем карту');
-                                        cdekMap = null;
-                                        
-                                        if (typeof ymaps !== 'undefined') {
-                                            initYandexMap();
-                                        }
-                                    }
-                                    
-                                    // Восстанавливаем ПВЗ после реинициализации
-                                    if (cdekPoints && cdekPoints.length > 0) {
-                                        setTimeout(() => {
-                                            if (cdekMap) {
-                                                console.log('📍 MutationObserver: Восстанавливаем ПВЗ');
-                                                displayCdekPoints(cdekPoints);
-                                            }
-                                        }, 500);
-                                    }
-                                }, 300);
-                            }
-                        } else {
-                            console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
-                            if (mapContainer.length > 0) {
-                                mapContainer.hide();
-                                resetCdekShippingToDefault();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    });
-    
-    // Начинаем наблюдение за изменениями
-    tabObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['aria-checked'],
-        subtree: true
-    });
+    // УДАЛЕН: старый дублирующийся MutationObserver
     
     $(document).on('click', 'input[value*="cdek_delivery"]', function() {
         debouncer.debounce('init-cdek-click', () => initCdekDelivery(), 200, 7);
@@ -2358,4 +2350,70 @@ jQuery(document).ready(function($) {
     console.log('🔍 Предотвращение повторных поисков');
     console.log('🏙️ Поддержка 1000+ городов России');
     console.log('📱 Оптимизировано для мобильных устройств');
+    
+            // MutationObserver для отслеживания изменений aria-checked в способах доставки
+        const shippingObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
+                    var target = mutation.target;
+                    var isSelected = target.getAttribute('aria-checked') === 'true';
+                    var titleElement = target.querySelector('.wc-block-checkout__shipping-method-option-title');
+                    var title = titleElement ? titleElement.textContent.trim() : '';
+                    
+                    console.log('🔄 Обнаружено изменение aria-checked:', title, 'Выбран:', isSelected);
+                    
+                    if (title === 'Доставка' && isSelected) {
+                        console.log('✅ Aria-checked: Выбрана "Доставка" - показываем карту');
+                        
+                        // ИСПРАВЛЕНИЕ: Принудительно показываем блок карты
+                        var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                        if (mapBlock.length > 0) {
+                            mapBlock.show();
+                            mapBlock[0].style.cssText = 'display: block !important; visibility: visible !important; height: auto !important; min-height: 500px !important;';
+                            console.log('🔧 Принудительно показан блок через aria-checked');
+                        }
+                        
+                        // Проверяем и переинициализируем карту если нужно
+                        setTimeout(() => {
+                            var mapElement = document.getElementById('cdek-map');
+                            if (!cdekMap || !mapElement || mapElement.offsetWidth === 0) {
+                                console.log('🔄 Переинициализация карты через aria-checked');
+                                cdekMap = null;
+                                initYandexMap();
+                                
+                                // Восстанавливаем ПВЗ
+                                if (cdekPoints && cdekPoints.length > 0) {
+                                    setTimeout(() => {
+                                        console.log('📍 Восстанавливаем ПВЗ через aria-checked');
+                                        displayCdekPoints(cdekPoints);
+                                    }, 1000);
+                                }
+                            } else {
+                                console.log('✅ Карта готова через aria-checked');
+                                if (mapElement) {
+                                    mapElement.style.cssText = 'display: block !important; visibility: visible !important; width: 100% !important; height: 450px !important;';
+                                }
+                            }
+                        }, 300);
+                        
+                    } else if (isSelected && (title === 'Самовывоз' || title === 'Обсудить доставку с менеджером')) {
+                        console.log('🙈 Aria-checked: Выбран другой способ - скрываем карту');
+                        
+                        // Скрываем блок карты
+                        var mapBlock = $('.wp-block-cdek-checkout-map-block');
+                        if (mapBlock.length > 0) {
+                            mapBlock.hide();
+                            console.log('🔧 Скрыт блок через aria-checked');
+                        }
+                    }
+                }
+            });
+        });
+
+        // Активируем наблюдение за изменениями aria-checked
+        shippingObserver.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['aria-checked'],
+            subtree: true
+        });
 });

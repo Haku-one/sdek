@@ -662,6 +662,28 @@ class CdekAPI {
             if (is_array($data)) {
                 error_log('СДЭК API: ✅ Найдено пунктов: ' . count($data));
                 
+                // ИСПРАВЛЕНИЕ: Подсчет типов точек для диагностики
+                $pvz_count = 0;
+                $postamat_count = 0;
+                foreach ($data as $point) {
+                    if (isset($point['type'])) {
+                        if (stripos($point['type'], 'postamat') !== false || stripos($point['type'], 'постамат') !== false) {
+                            $postamat_count++;
+                        } else {
+                            $pvz_count++;
+                        }
+                    } else {
+                        // Если тип не указан, проверяем по названию
+                        if (isset($point['name']) && (stripos($point['name'], 'постамат') !== false)) {
+                            $postamat_count++;
+                        } else {
+                            $pvz_count++;
+                        }
+                    }
+                }
+                
+                error_log('СДЭК API: 📊 Статистика точек для города "' . $city_for_api . '": ПВЗ=' . $pvz_count . ', Постоматы=' . $postamat_count . ', Всего=' . count($data));
+                
                 // ИСПРАВЛЕНИЕ: Дополнительная фильтрация на клиентской стороне если нужно
                 if (!empty($city_for_api) && !$city_code) {
                     // Если не нашли city_code, дополнительно фильтруем результаты
