@@ -52,6 +52,9 @@ class CdekDeliveryPlugin {
         add_action('wp_ajax_get_address_suggestions', array($this, 'ajax_get_address_suggestions'));
         add_action('wp_ajax_nopriv_get_address_suggestions', array($this, 'ajax_get_address_suggestions'));
         
+        // Логируем регистрацию AJAX хуков
+        error_log('🔧 CDEK PLUGIN: AJAX хуки зарегистрированы для calculate_cdek_delivery_cost');
+        
         // НОВОЕ: AJAX для сохранения данных СДЭК в сессии
         add_action('wp_ajax_save_cdek_data_to_session', array($this, 'ajax_save_cdek_data_to_session'));
         add_action('wp_ajax_nopriv_save_cdek_data_to_session', array($this, 'ajax_save_cdek_data_to_session'));
@@ -237,11 +240,41 @@ class CdekDeliveryPlugin {
     }
     
     public function ajax_calculate_delivery_cost() {
+        error_log('🔥 AJAX: =================== НОВЫЙ ЗАПРОС РАСЧЕТА ===================');
         error_log('🔥 AJAX: Начинаем обработку запроса расчета стоимости СДЭК');
+        error_log('🔥 AJAX: $_POST данные: ' . print_r($_POST, true));
+        error_log('🔥 AJAX: Метод запроса: ' . $_SERVER['REQUEST_METHOD']);
+        error_log('🔥 AJAX: User Agent: ' . (isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'не установлен'));
+        
+        // Проверяем, что это AJAX запрос
+        if (!defined('DOING_AJAX') || !DOING_AJAX) {
+            error_log('❌ AJAX: Это не AJAX запрос!');
+            wp_die('Not an AJAX request');
+        }
+        
+        // Проверяем nonce
+        if (!isset($_POST['nonce'])) {
+            error_log('❌ AJAX: Nonce не передан в запросе');
+            wp_send_json_error('Nonce не передан');
+            return;
+        }
         
         if (!wp_verify_nonce($_POST['nonce'], 'cdek_nonce')) {
             error_log('❌ AJAX: Ошибка проверки nonce');
-            wp_die('Security check failed');
+            error_log('❌ AJAX: Переданный nonce: ' . $_POST['nonce']);
+            error_log('❌ AJAX: Ожидаемый nonce: cdek_nonce');
+            wp_send_json_error('Security check failed');
+            return;
+        }
+        
+        // Проверяем наличие всех необходимых параметров
+        $required_params = ['point_code', 'point_data', 'cart_weight', 'cart_dimensions', 'cart_value', 'has_real_dimensions'];
+        foreach ($required_params as $param) {
+            if (!isset($_POST[$param])) {
+                error_log('❌ AJAX: Отсутствует обязательный параметр: ' . $param);
+                wp_send_json_error('Отсутствует параметр: ' . $param);
+                return;
+            }
         }
         
         $point_code = sanitize_text_field($_POST['point_code']);
@@ -250,6 +283,25 @@ class CdekDeliveryPlugin {
         $cart_dimensions = json_decode(stripslashes($_POST['cart_dimensions']), true);
         $cart_value = floatval($_POST['cart_value']);
         $has_real_dimensions = intval($_POST['has_real_dimensions']);
+        
+        // Проверяем корректность JSON данных
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('❌ AJAX: Ошибка декодирования JSON: ' . json_last_error_msg());
+            wp_send_json_error('Ошибка декодирования JSON данных');
+            return;
+        }
+        
+        if (empty($point_data)) {
+            error_log('❌ AJAX: point_data пуст после декодирования JSON');
+            wp_send_json_error('Некорректные данные пункта выдачи');
+            return;
+        }
+        
+        if (empty($cart_dimensions)) {
+            error_log('❌ AJAX: cart_dimensions пуст после декодирования JSON');
+            wp_send_json_error('Некорректные данные габаритов');
+            return;
+        }
         
         error_log('🔥 AJAX: САРАТОВ ЖЕСТКО ЗАФИКСИРОВАН В PHP!');
         error_log('🔥 AJAX: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
