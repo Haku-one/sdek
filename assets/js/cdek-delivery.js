@@ -5,7 +5,7 @@
 
 // ========== УТИЛИТЫ ДЛЯ ОПТИМИЗАЦИИ ==========
 
-// Мемоизация с TTL - улучшенная версия для мощного поиска
+// Мемоизация с TTL
 class Memoizer {
     constructor(ttl = 300000) {
         this.cache = new Map();
@@ -24,7 +24,7 @@ class Memoizer {
             const result = fn.apply(this, args);
             this.cache.set(key, { value: result, timestamp: Date.now() });
             
-            if (this.cache.size > 200) { // Увеличено для мощного поиска ПВЗ
+            if (this.cache.size > 50) { // Уменьшено для мобильных
                 const oldestKey = this.cache.keys().next().value;
                 this.cache.delete(oldestKey);
             }
@@ -711,6 +711,21 @@ jQuery(document).ready(function($) {
     function calculateDeliveryCost(point, callback) {
         var cartData = getCartDataForCalculation();
         
+        if (typeof cdek_ajax === 'undefined' || !cdek_ajax.ajax_url) {
+            console.error('CDEK AJAX не инициализирован');
+            callback(calculateFallbackCost(point, cartData));
+            return;
+        }
+        
+        if (!point || !point.code) {
+            console.error('Не указан пункт выдачи или его код');
+            callback(calculateFallbackCost(point, cartData));
+            return;
+        }
+        
+        console.log('Запрос расчета стоимости доставки для пункта:', point.code);
+        console.log('Данные корзины:', cartData);
+        
         $.ajax({
             url: cdek_ajax.ajax_url,
             type: 'POST',
@@ -724,37 +739,99 @@ jQuery(document).ready(function($) {
                 cart_dimensions: JSON.stringify(cartData.dimensions),
                 cart_value: cartData.value,
                 has_real_dimensions: cartData.hasRealDimensions ? 1 : 0,
-                nonce: cdek_ajax.nonce
+                packages_count: cartData.packagesCount || 1,
+                nonce: cdek_ajax.nonce || ''
             },
             success: function(response) {
-                console.log('=== ПОЛНЫЙ ОТВЕТ СЕРВЕРА ===');
-                console.log('response:', response);
-                console.log('response.success:', response ? response.success : 'undefined');
-                console.log('response.data:', response ? response.data : 'undefined');
-                if (response && response.data) {
-                    console.log('response.data.message:', response.data.message);
-                    console.log('response.data.delivery_sum:', response.data.delivery_sum);
-                }
-                console.log('=== КОНЕЦ ОТВЕТА ===');
+                console.log('Ответ API расчета стоимости:', response);
                 
-                if (response.success && response.data && response.data.delivery_sum) {
+                if (response && response.success && response.data && response.data.delivery_sum) {
                     var deliveryCost = parseInt(response.data.delivery_sum);
                     
                     if (cartData.packagesCount > 1) {
+                        var costPerPackage = deliveryCost;
                         deliveryCost = deliveryCost * cartData.packagesCount;
+                        console.log('📦 Стоимость пересчитана для', cartData.packagesCount, 'коробок:', costPerPackage, '×', cartData.packagesCount, '=', deliveryCost, 'руб.');
                     }
                     
-                    if (callback) callback(deliveryCost);
+                    if (response.data.fallback) {
+                        console.warn('⚠️ Используется резервный расчет:', deliveryCost, 'руб.');
+                        console.log('Причина:', response.data.message);
+                    } else if (response.data.api_success) {
+                        console.log('✅ Успешно получена стоимость из настоящего API СДЭК:', deliveryCost, 'руб.');
+                        if (response.data.alternative_tariff) {
+                            console.log('Использован альтернативный тариф:', response.data.alternative_tariff);
+                        }
+                    } else {
+                        console.log('💰 Получена стоимость доставки:', deliveryCost, 'руб.');
+                    }
+                    
+                    callback(deliveryCost);
+                } else if (!response.success) {
+                    console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
+                    
+                    // Используем fallback вместо показа ошибки пользователю
+                    var fallbackCost = calculateFallbackCost(point, cartData);
+                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    callback(fallbackCost);
                 } else {
-                    console.error('Ошибка расчета стоимости доставки СДЭК:', response);
-                    if (callback) callback(null);
+                    console.error('❌ API СДЭК вернул некорректный ответ');
+                    
+                    var fallbackCost = calculateFallbackCost(point, cartData);
+                    console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                    callback(fallbackCost);
                 }
             },
             error: function(xhr, status, error) {
-                console.error('AJAX ошибка при расчете стоимости СДЭК:', error);
-                if (callback) callback(null);
+                console.error('❌ Критическая ошибка запроса к API СДЭК:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText,
+                    readyState: xhr.readyState
+                });
+                
+                // Используем fallback вместо показа ошибки
+                var fallbackCost = calculateFallbackCost(point, cartData);
+                console.log('🔄 Используем резервный расчет стоимости:', fallbackCost, 'руб.');
+                callback(fallbackCost);
             }
         });
+    }
+    
+    function calculateFallbackCost(point, cartData) {
+        var baseCost = 350; // Базовая стоимость
+        
+        if (!cartData) {
+            return baseCost;
+        }
+        
+        // Надбавка за вес
+        if (cartData.weight > 500) {
+            var extraWeight = Math.ceil((cartData.weight - 500) / 500);
+            baseCost += extraWeight * 40;
+        }
+        
+        // Надбавка за габариты
+        if (cartData.hasRealDimensions && cartData.dimensions) {
+            var volume = cartData.dimensions.length * cartData.dimensions.width * cartData.dimensions.height;
+            if (volume > 12000) {
+                var extraVolume = Math.ceil((volume - 12000) / 6000);
+                baseCost += extraVolume * 60;
+            }
+        }
+        
+        // Надбавка за стоимость
+        if (cartData.value > 3000) {
+            baseCost += Math.ceil((cartData.value - 3000) / 1000) * 25;
+        }
+        
+        // Умножаем на количество коробок
+        if (cartData.packagesCount > 1) {
+            baseCost = baseCost * cartData.packagesCount;
+            console.log('📦 Fallback стоимость пересчитана для', cartData.packagesCount, 'коробок:', baseCost, 'руб.');
+        }
+        
+        return baseCost;
     }
     
     // ========== ОСТАЛЬНЫЕ ФУНКЦИИ (УПРОЩЕННЫЕ ДЛЯ МОБИЛЬНЫХ) ==========
