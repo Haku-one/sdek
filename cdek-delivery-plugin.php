@@ -240,41 +240,8 @@ class CdekDeliveryPlugin {
     }
     
     public function ajax_calculate_delivery_cost() {
-        error_log('🔥 AJAX: =================== НОВЫЙ ЗАПРОС РАСЧЕТА ===================');
-        error_log('🔥 AJAX: Начинаем обработку запроса расчета стоимости СДЭК');
-        error_log('🔥 AJAX: $_POST данные: ' . print_r($_POST, true));
-        error_log('🔥 AJAX: Метод запроса: ' . $_SERVER['REQUEST_METHOD']);
-        error_log('🔥 AJAX: User Agent: ' . (isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'не установлен'));
-        
-        // Проверяем, что это AJAX запрос
-        if (!defined('DOING_AJAX') || !DOING_AJAX) {
-            error_log('❌ AJAX: Это не AJAX запрос!');
-            wp_die('Not an AJAX request');
-        }
-        
-        // Проверяем nonce
-        if (!isset($_POST['nonce'])) {
-            error_log('❌ AJAX: Nonce не передан в запросе');
-            wp_send_json_error('Nonce не передан');
-            return;
-        }
-        
         if (!wp_verify_nonce($_POST['nonce'], 'cdek_nonce')) {
-            error_log('❌ AJAX: Ошибка проверки nonce');
-            error_log('❌ AJAX: Переданный nonce: ' . $_POST['nonce']);
-            error_log('❌ AJAX: Ожидаемый nonce: cdek_nonce');
-            wp_send_json_error('Security check failed');
-            return;
-        }
-        
-        // Проверяем наличие всех необходимых параметров
-        $required_params = ['point_code', 'point_data', 'cart_weight', 'cart_dimensions', 'cart_value', 'has_real_dimensions'];
-        foreach ($required_params as $param) {
-            if (!isset($_POST[$param])) {
-                error_log('❌ AJAX: Отсутствует обязательный параметр: ' . $param);
-                wp_send_json_error('Отсутствует параметр: ' . $param);
-                return;
-            }
+            wp_die('Security check failed');
         }
         
         $point_code = sanitize_text_field($_POST['point_code']);
@@ -283,31 +250,11 @@ class CdekDeliveryPlugin {
         $cart_dimensions = json_decode(stripslashes($_POST['cart_dimensions']), true);
         $cart_value = floatval($_POST['cart_value']);
         $has_real_dimensions = intval($_POST['has_real_dimensions']);
+
         
-        // Проверяем корректность JSON данных
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('❌ AJAX: Ошибка декодирования JSON: ' . json_last_error_msg());
-            wp_send_json_error('Ошибка декодирования JSON данных');
-            return;
-        }
-        
-        if (empty($point_data)) {
-            error_log('❌ AJAX: point_data пуст после декодирования JSON');
-            wp_send_json_error('Некорректные данные пункта выдачи');
-            return;
-        }
-        
-        if (empty($cart_dimensions)) {
-            error_log('❌ AJAX: cart_dimensions пуст после декодирования JSON');
-            wp_send_json_error('Некорректные данные габаритов');
-            return;
-        }
-        
-        error_log('🔥 AJAX: САРАТОВ ЖЕСТКО ЗАФИКСИРОВАН В PHP!');
-        error_log('🔥 AJAX: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
-        error_log('🔥 AJAX: Размеры: ' . print_r($cart_dimensions, true));
-        error_log('🔥 AJAX: Данные пункта: ' . print_r($point_data, true));
-        error_log('🔥 AJAX: Реальные габариты: ' . ($has_real_dimensions ? 'Да' : 'Нет'));
+        error_log('СДЭК расчет: Данные для расчета - Код пункта: ' . $point_code . ', Вес: ' . $cart_weight . ', Стоимость: ' . $cart_value);
+        error_log('СДЭК расчет: Размеры: ' . print_r($cart_dimensions, true));
+        error_log('СДЭК расчет: Реальные габариты: ' . ($has_real_dimensions ? 'Да' : 'Нет'));
         
         // Проверяем, что у нас есть все необходимые данные
         if (empty($point_code)) {
@@ -322,44 +269,31 @@ class CdekDeliveryPlugin {
             return;
         }
         
-        error_log('🔥 AJAX: ================= ВЫЗОВ ОСНОВНОЙ ФУНКЦИИ РАСЧЕТА =================');
-        error_log('🔥 AJAX: Создаем экземпляр CdekAPI и вызываем расчет');
-        error_log('🔥 AJAX: Параметры расчета:');
-        error_log('🔥 AJAX: - point_code: ' . $point_code);
-        error_log('🔥 AJAX: - cart_weight: ' . $cart_weight);
-        error_log('🔥 AJAX: - cart_value: ' . $cart_value);
-        error_log('🔥 AJAX: - has_real_dimensions: ' . $has_real_dimensions);
-        
         $cdek_api = new CdekAPI();
         $cost_data = $cdek_api->calculate_delivery_cost_to_point($point_code, $point_data, $cart_weight, $cart_dimensions, $cart_value, $has_real_dimensions);
         
-        error_log('🔥 AJAX: ================= РЕЗУЛЬТАТ ОСНОВНОЙ ФУНКЦИИ =================');
-        
-        error_log('🔥 AJAX: Получен результат расчета: ' . print_r($cost_data, true));
-        
         if ($cost_data && isset($cost_data['delivery_sum']) && $cost_data['delivery_sum'] > 0) {
-            error_log('🔥 AJAX: ✅ Успешно рассчитана стоимость через API: ' . $cost_data['delivery_sum'] . ' руб.');
+            error_log('СДЭК расчет: ✅ Успешно рассчитана стоимость через НАСТОЯЩИЙ API: ' . $cost_data['delivery_sum']);
             
             // Убедимся что передаем флаг успешного API расчета
             $cost_data['api_success'] = true;
             $cost_data['fallback'] = false;
             
-            error_log('🔥 AJAX: Отправляем успешный ответ в JS');
             wp_send_json_success($cost_data);
         } else {
-            error_log('🔥 AJAX: ❌ API не вернул корректную стоимость!');
-            error_log('🔥 AJAX: Детали ответа API: ' . print_r($cost_data, true));
-            error_log('🔥 AJAX: Отправляем ошибку в JS');
+            error_log('СДЭК расчет: ❌ API не вернул корректную стоимость.');
+            error_log('СДЭК расчет: Детали ответа API: ' . print_r($cost_data, true));
+            error_log('СДЭК расчет: ❌ ОТКАЗЫВАЕМСЯ ОТ РАСЧЕТА - НЕТ FALLBACK');
             
-            // Возвращаем ошибку - только API расчет
+            // НЕТ РЕЗЕРВНОГО РАСЧЕТА! Возвращаем ошибку
             wp_send_json_error(array(
-                'message' => 'Не удалось рассчитать стоимость доставки СДЭК. Попробуйте выбрать другой пункт выдачи.',
+                'message' => 'API СДЭК недоступен, расчет стоимости невозможен',
                 'api_response' => $cost_data,
                 'debug_info' => array(
                     'point_code' => $point_code,
                     'cart_weight' => $cart_weight,
-                    'cart_dimensions' => $cart_dimensions,
-                    'from_saratov_hardcoded' => true
+                    'cart_value' => $cart_value,
+                    'cart_dimensions' => $cart_dimensions
                 )
             ));
         }
