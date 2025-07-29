@@ -1293,44 +1293,7 @@ jQuery(document).ready(function($) {
         });
     }
     
-    // Функция для загрузки всех ПВЗ России
-    function loadAllCdekPoints() {
-        console.log('🌍 Загружаем все ПВЗ России...');
-        showPvzLoader();
-        
-        // Очищаем текущий поиск
-        window.currentSearchCity = null;
-        window.currentSearchStreet = null;
-        window.currentSearchCoordinates = null;
-        
-        // Отправляем запрос с адресом "Россия" для получения всех ПВЗ
-        $.ajax({
-            url: cdek_ajax.ajax_url,
-            type: 'POST',
-            dataType: 'json',
-            timeout: 60000, // Увеличиваем таймаут для загрузки всех ПВЗ
-            data: {
-                action: 'get_cdek_points',
-                address: 'Россия',
-                nonce: cdek_ajax.nonce
-            },
-            success: function(response) {
-                hidePvzLoader();
-                if (response.success && response.data) {
-                    console.log('✅ Загружено всех ПВЗ России:', response.data.length);
-                    displayCdekPoints(response.data);
-                } else {
-                    console.error('❌ Ошибка загрузки всех ПВЗ:', response);
-                    showPvzError('Не удалось загрузить все пункты выдачи');
-                }
-            },
-            error: function(xhr, status, error) {
-                hidePvzLoader();
-                console.error('❌ Ошибка HTTP при загрузке всех ПВЗ:', error);
-                showPvzError('Ошибка загрузки всех пунктов выдачи');
-            }
-        });
-    }
+
     
     function performCdekSearch() {
         if (typeof cdek_ajax === 'undefined') return;
@@ -1357,6 +1320,44 @@ jQuery(document).ready(function($) {
                 hidePvzLoader();
                 if (response.success && response.data) {
                     console.log('✅ Получено ПВЗ от API:', response.data.length);
+                    
+                    // Отладочная информация - показываем первые несколько пунктов
+                    if (response.data.length > 0) {
+                        console.log('🔍 Первые 3 пункта от API:');
+                        for (var i = 0; i < Math.min(3, response.data.length); i++) {
+                            var point = response.data[i];
+                            console.log('Пункт ' + (i+1) + ':', {
+                                code: point.code,
+                                name: point.name,
+                                type: point.type,
+                                city: point.location ? point.location.city : 'не указан',
+                                address: point.location ? point.location.address : 'не указан',
+                                address_comment: point.address_comment
+                            });
+                        }
+                        
+                        // Ищем конкретно пункт в Тюмени по адресу Зелинского
+                        var tyumenPoints = response.data.filter(function(point) {
+                            var hasZelinsky = false;
+                            if (point.location && point.location.address) {
+                                hasZelinsky = point.location.address.toLowerCase().includes('зелинск');
+                            }
+                            if (!hasZelinsky && point.address_comment) {
+                                hasZelinsky = point.address_comment.toLowerCase().includes('зелинск');
+                            }
+                            if (!hasZelinsky && point.name) {
+                                hasZelinsky = point.name.toLowerCase().includes('зелинск');
+                            }
+                            return hasZelinsky;
+                        });
+                        
+                        if (tyumenPoints.length > 0) {
+                            console.log('🎯 Найдены пункты с адресом Зелинского:', tyumenPoints);
+                        } else {
+                            console.log('❌ Пункт по адресу Зелинского НЕ найден в ответе API');
+                        }
+                    }
+                    
                     displayCdekPoints(response.data);
                 } else {
                     console.error('❌ Ошибка получения ПВЗ:', response);
@@ -1388,19 +1389,38 @@ jQuery(document).ready(function($) {
         }
         
         var filteredPoints = points.filter(function(point) {
-            if (point.type !== 'PVZ' && point.type) return false;
+            // Убираем фильтрацию по типу - показываем все пункты выдачи
+            // if (point.type !== 'PVZ' && point.type) return false;
             
             if (window.currentSearchCity) {
                 var pointCity = '';
                 
+                // Пытаемся получить город из разных полей
                 if (point.location && point.location.city) {
                     pointCity = point.location.city.trim();
                 }
                 
+                // Если не нашли в location.city, ищем в address
+                if (!pointCity && point.location && point.location.address) {
+                    var addressParts = point.location.address.split(',');
+                    if (addressParts.length > 0) {
+                        pointCity = addressParts[0].trim();
+                    }
+                }
+                
+                // Если не нашли в address, ищем в name
                 if (!pointCity && point.name && point.name.includes(',')) {
                     var nameParts = point.name.split(',');
                     if (nameParts.length >= 2) {
                         pointCity = nameParts[1].trim();
+                    }
+                }
+                
+                // Если не нашли в name, ищем в полном адресе
+                if (!pointCity && point.address_comment) {
+                    var commentParts = point.address_comment.split(',');
+                    if (commentParts.length > 0) {
+                        pointCity = commentParts[0].trim();
                     }
                 }
                 
@@ -1411,11 +1431,37 @@ jQuery(document).ready(function($) {
                 var searchCityLower = window.currentSearchCity.toLowerCase().trim();
                 var pointCityLower = pointCity.toLowerCase().trim();
                 
-                if (pointCityLower !== searchCityLower) return false;
+                // Более гибкое сравнение - проверяем вхождение
+                if (pointCityLower && searchCityLower) {
+                    if (pointCityLower !== searchCityLower && 
+                        !pointCityLower.includes(searchCityLower) && 
+                        !searchCityLower.includes(pointCityLower)) {
+                        return false;
+                    }
+                }
             }
             
             return true;
         });
+        
+        console.log('🔍 Фильтрация ПВЗ:');
+        console.log('- Всего получено от API:', points.length);
+        console.log('- После фильтрации:', filteredPoints.length);
+        console.log('- Поисковый город:', window.currentSearchCity);
+        
+        // Показываем примеры отфильтрованных пунктов
+        if (filteredPoints.length > 0) {
+            console.log('- Первые 3 отфильтрованных пункта:');
+            for (var i = 0; i < Math.min(3, filteredPoints.length); i++) {
+                var point = filteredPoints[i];
+                console.log('  Пункт ' + (i+1) + ':', {
+                    code: point.code,
+                    name: point.name,
+                    city: point.location ? point.location.city : 'не указан',
+                    address: point.location ? point.location.address : 'не указан'
+                });
+            }
+        }
         
         if (window.currentSearchCoordinates && filteredPoints.length > 0) {
             filteredPoints.sort(function(a, b) {
@@ -1900,17 +1946,6 @@ jQuery(document).ready(function($) {
                     <div id="cdek-points-info" style="margin-bottom: 10px; padding: 10px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px;">
                         <strong>Информация:</strong>
                         <div id="cdek-points-count">Введите город в поле адреса выше для поиска пунктов выдачи</div>
-                        <div style="margin-top: 10px;">
-                            <button id="load-all-cdek-points" type="button" style="
-                                background: #4CAF50;
-                                color: white;
-                                border: none;
-                                padding: 8px 16px;
-                                border-radius: 4px;
-                                cursor: pointer;
-                                font-size: 14px;
-                            ">🌍 Показать все ПВЗ России</button>
-                        </div>
                     </div>
                     <div id="cdek-selected-point" style="margin-bottom: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; display: none;">
                         <strong>Выбранный пункт:</strong>
@@ -2019,11 +2054,7 @@ jQuery(document).ready(function($) {
         }
     });
     
-    // Обработчик кнопки "Показать все ПВЗ России"
-    $(document).on('click', '#load-all-cdek-points', function() {
-        console.log('🌍 Нажата кнопка загрузки всех ПВЗ России');
-        loadAllCdekPoints();
-    });
+
     
     var observer = new MutationObserver(function(mutations) {
         var needsUpdate = false;
