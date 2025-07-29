@@ -712,14 +712,14 @@ jQuery(document).ready(function($) {
         var cartData = getCartDataForCalculation();
         
         if (typeof cdek_ajax === 'undefined' || !cdek_ajax.ajax_url) {
-            
-            if (callback) callback(calculateFallbackCost(point, cartData));
+            console.error('❌ CDEK AJAX не настроен');
+            if (callback) callback(null);
             return;
         }
         
         if (!point || !point.code) {
-            
-            if (callback) callback(calculateFallbackCost(point, cartData));
+            console.error('❌ Не указан пункт выдачи для расчета стоимости');
+            if (callback) callback(null);
             return;
         }
         
@@ -754,84 +754,42 @@ jQuery(document).ready(function($) {
                         
                     }
                     
-                    if (response.data.fallback) {
-                        
-                        
-                    } else if (response.data.api_success) {
-                        
+                    // Только API расчет - без fallback
+                    if (response.data.api_success || response.data.delivery_sum > 0) {
                         if (response.data.alternative_tariff) {
-                            
+                            console.log('🔄 Использован альтернативный тариф:', response.data.alternative_tariff);
                         }
                     } else {
-                        
+                        console.error('❌ API вернул некорректные данные');
+                        if (callback) callback(null);
+                        return;
                     }
                     
                     if (callback) callback(deliveryCost);
                 } else if (!response.success) {
+                    console.error('❌ API СДЭК вернул ошибку:', response.data ? response.data.message : 'Неизвестная ошибка');
                     
-                    
-                    // Используем fallback вместо показа ошибки пользователю
-                    var fallbackCost = calculateFallbackCost(point, cartData);
-                    
-                    if (callback) callback(fallbackCost);
+                    // Показываем ошибку пользователю вместо fallback
+                    if (callback) callback(null);
                 } else {
+                    console.error('❌ Некорректный ответ от API СДЭК');
                     
-                    
-                    var fallbackCost = calculateFallbackCost(point, cartData);
-                    
-                    if (callback) callback(fallbackCost);
+                    // Показываем ошибку пользователю вместо fallback
+                    if (callback) callback(null);
                 }
             },
             error: function(xhr, status, error) {
-                console.log('AJAX error:', {
+                console.error('❌ AJAX ошибка при расчете стоимости:', {
                     status: status,
                     error: error,
                     responseText: xhr.responseText,
                     readyState: xhr.readyState
                 });
                 
-                // Используем fallback вместо показа ошибки
-                var fallbackCost = calculateFallbackCost(point, cartData);
-                
-                if (callback) callback(fallbackCost);
+                // Показываем ошибку пользователю вместо fallback
+                if (callback) callback(null);
             }
         });
-    }
-    
-    function calculateFallbackCost(point, cartData) {
-        var baseCost = 350; // Базовая стоимость
-        
-        if (!cartData) {
-            return baseCost;
-        }
-        
-        // Надбавка за вес
-        if (cartData.weight > 500) {
-            var extraWeight = Math.ceil((cartData.weight - 500) / 500);
-            baseCost += extraWeight * 40;
-        }
-        
-        // Надбавка за габариты
-        if (cartData.hasRealDimensions && cartData.dimensions) {
-            var volume = cartData.dimensions.length * cartData.dimensions.width * cartData.dimensions.height;
-            if (volume > 12000) {
-                var extraVolume = Math.ceil((volume - 12000) / 6000);
-                baseCost += extraVolume * 60;
-            }
-        }
-        
-        // Надбавка за стоимость
-        if (cartData.value > 3000) {
-            baseCost += Math.ceil((cartData.value - 3000) / 1000) * 25;
-        }
-        
-        // Умножаем на количество коробок
-        if (cartData.packagesCount > 1) {
-            baseCost = baseCost * cartData.packagesCount;
-            
-        }
-        
-        return baseCost;
     }
     
     // ========== ОСТАЛЬНЫЕ ФУНКЦИИ (УПРОЩЕННЫЕ ДЛЯ МОБИЛЬНЫХ) ==========
@@ -1850,6 +1808,23 @@ jQuery(document).ready(function($) {
         
         memoizedCalculateDeliveryCost(point, function(deliveryCost) {
             hideDeliveryCalculationLoader();
+            
+            // Проверяем, удалось ли рассчитать стоимость
+            if (deliveryCost === null || deliveryCost === undefined) {
+                console.error('❌ Не удалось рассчитать стоимость доставки');
+                
+                // Показываем ошибку пользователю
+                var allShippingBlocks = $('.wc-block-components-totals-shipping .wc-block-components-totals-item, .wp-block-woocommerce-checkout-order-summary-shipping-block .wc-block-components-totals-item');
+                allShippingBlocks.each(function() {
+                    var labelElement = $(this).find('.wc-block-components-totals-item__label');
+                    var valueElement = $(this).find('.wc-block-components-totals-item__value');
+                    
+                    labelElement.text('Ошибка расчета доставки СДЭК');
+                    valueElement.text('Попробуйте другой ПВЗ');
+                });
+                
+                return;
+            }
             
             var allShippingBlocks = $();
             
