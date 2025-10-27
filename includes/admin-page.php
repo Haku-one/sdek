@@ -21,7 +21,7 @@ if (isset($_POST['submit'])) {
 $cdek_account = get_option('cdek_account', 'Lr7x5fauu0eOXDA4hlK04HiMUpqHgzzR');
 $cdek_password = get_option('cdek_password', 'fzwKqoaKaTrwRjxVhf6csNzTefyHRHYM');
 $cdek_test_mode = get_option('cdek_test_mode', 0);
-$cdek_sender_city = get_option('cdek_sender_city', '51');
+$cdek_sender_city = get_option('cdek_sender_city', '354');
 $cdek_yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10e-8ab18f0f3702');
 
 ?>
@@ -87,6 +87,9 @@ $cdek_yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10
     <p>
         <button type="button" id="test-cdek-connection" class="button button-secondary">Проверить подключение</button>
         <button type="button" id="test-cdek-calculation" class="button button-primary" style="margin-left: 10px;">Тестировать расчет стоимости</button>
+        <button type="button" id="test-cdek-api-detailed" class="button button-secondary" style="margin-left: 10px;">Детальное тестирование API</button>
+        <button type="button" id="test-saratov-kursk" class="button button-secondary" style="margin-left: 10px;">🎯 Тест Саратов-Курск</button>
+        <button type="button" id="test-super-debug" class="button button-secondary" style="margin-left: 10px; background: #d63384; color: white;">💥 СУПЕР ДЕБАГ</button>
     </p>
     <div id="connection-result" style="margin-top: 10px;"></div>
     <div id="calculation-result" style="margin-top: 10px;"></div>
@@ -132,6 +135,69 @@ $cdek_yandex_api_key = get_option('cdek_yandex_api_key', '4020b4d5-1d96-476c-a10
                 }
                 
                 button.prop('disabled', false).text('Тестировать расчет стоимости');
+            });
+        });
+        
+        $('#test-cdek-api-detailed').on('click', function() {
+            var button = $(this);
+            var result = $('#calculation-result');
+            
+            button.prop('disabled', true).text('Детальное тестирование...');
+            result.html('');
+            
+            $.post(ajaxurl, {
+                action: 'test_cdek_api_detailed',
+                nonce: '<?php echo wp_create_nonce('test_cdek_api_detailed'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    result.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
+                } else {
+                    result.html('<div class="notice notice-error inline"><p>' + response.data.message + '</p></div>');
+                }
+                
+                button.prop('disabled', false).text('Детальное тестирование API');
+            });
+        });
+        
+        $('#test-saratov-kursk').on('click', function() {
+            var button = $(this);
+            var result = $('#calculation-result');
+            
+            button.prop('disabled', true).text('🎯 Тестируем Саратов-Курск...');
+            result.html('');
+            
+            $.post(ajaxurl, {
+                action: 'test_saratov_kursk',
+                nonce: '<?php echo wp_create_nonce('test_saratov_kursk'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    result.html('<div class="notice notice-success inline"><p>🎉 ' + response.data + '</p></div>');
+                } else {
+                    result.html('<div class="notice notice-error inline"><p>❌ ' + response.data.message + '</p></div>');
+                }
+                
+                button.prop('disabled', false).text('🎯 Тест Саратов-Курск');
+            });
+        });
+        
+        $('#test-super-debug').on('click', function() {
+            var button = $(this);
+            var result = $('#calculation-result');
+            
+            button.prop('disabled', true).text('💥 СУПЕР ДЕБАГ...');
+            result.html('<div class="notice notice-info inline"><p>💥 Запущен СУПЕР ДЕБАГ! Проверяйте логи WordPress...</p></div>');
+            
+            $.post(ajaxurl, {
+                action: 'super_debug',
+                nonce: '<?php echo wp_create_nonce('super_debug'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    result.html('<div class="notice notice-success inline"><p>💥 ' + response.data + '</p></div>');
+                } else {
+                    result.html('<div class="notice notice-error inline"><p>💥 ' + response.data + '</p></div>');
+                }
+                
+                button.prop('disabled', false).text('💥 СУПЕР ДЕБАГ');
             });
         });
     });
